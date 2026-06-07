@@ -1,9 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminSupabase } from "@/lib/supabase/server";
 import { normalizeName } from "@/lib/suppliers/matching";
-import type { InvoiceStatus } from "@/lib/constants";
+import { STORAGE_BUCKET, type InvoiceStatus } from "@/lib/constants";
 
 export const runtime = "nodejs";
+
+/**
+ * Preview payload for the invoice modal: a signed URL for the original file
+ * (private bucket) plus line items. The row fields the modal already has from
+ * the table, so this only fetches what the table didn't carry.
+ */
+export async function GET(
+  _req: NextRequest,
+  ctx: RouteContext<"/api/invoices/[id]">,
+) {
+  const { id } = await ctx.params;
+  const supabase = createAdminSupabase();
+  if (!supabase)
+    return NextResponse.json({ error: "Supabase not configured" }, { status: 503 });
+
+  const { data: invoice } = await supabase
+    .from("invoices")
+    .select("original_file_path")
+    .eq("id", id)
+    .single();
+
+  let imageUrl: string | null = null;
+  let isPdf = false;
+  if (invoice?.original_file_path) {
+    isPdf = invoice.original_file_path.toLowerCase().endsWith(".pdf");
+    const { data } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .createSignedUrl(invoice.original_file_path, 60 * 60);
+    imageUrl = data?.signedUrl ?? null;
+  }
+
+  const { data: items } = await supabase
+    .from("invoice_items")
+    .select("*")
+    .eq("invoice_id", id);
+
+  return NextResponse.json({ imageUrl, isPdf, items: items ?? [] });
+}
 
 interface PatchBody {
   // editable invoice fields (subset)

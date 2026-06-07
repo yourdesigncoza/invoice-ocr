@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ConfidenceBadge } from "@/components/ConfidenceBadge";
+import { InvoiceModal } from "@/components/InvoiceModal";
 import { formatMoney, formatDate } from "@/lib/utils";
 import type { InvoiceWithSupplier } from "@/lib/types";
 
@@ -48,9 +48,7 @@ export function InvoiceTable({ invoices }: { invoices: InvoiceWithSupplier[] }) 
                 </Td>
                 <Td className="text-right"><ConfidenceBadge score={inv.confidence_score} /></Td>
                 <Td className="text-right">
-                  <Link href={`/review/${inv.id}`} className="text-primary text-xs font-medium hover:underline">
-                    View
-                  </Link>
+                  <InvoiceModal invoice={inv} />
                 </Td>
               </tr>
             ))}
