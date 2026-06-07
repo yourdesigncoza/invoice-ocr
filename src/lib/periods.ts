@@ -14,8 +14,20 @@ export interface DateRange {
   to?: string;
 }
 
+// Format/parse in LOCAL date components. Using toISOString()/`new Date(iso)`
+// would convert through UTC and drift the day by one in timezones ahead of UTC
+// (e.g. SAST, UTC+2) at month/quarter boundaries. Invoice dates are date-only,
+// so we stay in local date space throughout.
 function iso(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function parseISO(s: string): Date {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, (m ?? 1) - 1, d ?? 1);
 }
 
 /** Range for a named period, relative to `ref` (defaults to now at call site). */
@@ -49,7 +61,7 @@ export type GroupBy = "day" | "week" | "month" | "quarter" | "year";
 
 /** Bucket key for grouping an ISO date (PRD §7.8). */
 export function bucketKey(isoDate: string, group: GroupBy): string {
-  const d = new Date(isoDate);
+  const d = parseISO(isoDate);
   const y = d.getFullYear();
   switch (group) {
     case "day":
@@ -67,7 +79,7 @@ export function bucketKey(isoDate: string, group: GroupBy): string {
 
 /** The from/to date window of the bucket that contains `isoDate` (PRD §7.8). */
 export function bucketRange(isoDate: string, group: GroupBy): DateRange {
-  const d = new Date(isoDate);
+  const d = parseISO(isoDate);
   const y = d.getFullYear();
   const m = d.getMonth();
   switch (group) {
