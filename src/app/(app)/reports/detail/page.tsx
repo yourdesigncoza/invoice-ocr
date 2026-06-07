@@ -36,16 +36,27 @@ export default async function ReportDetailPage(
   const vat = invoices.reduce((s, i) => s + Number(i.vat_amount ?? 0), 0);
 
   // per-supplier breakdown within the period
-  const bySupplier = new Map<string, { count: number; spend: number; vat: number }>();
+  const bySupplier = new Map<
+    string,
+    { count: number; spend: number; vat: number; lastDate: string }
+  >();
   for (const i of invoices) {
     const name = i.supplier?.supplier_name || i.original_supplier_name || "Unknown";
-    const b = bySupplier.get(name) ?? { count: 0, spend: 0, vat: 0 };
+    const b = bySupplier.get(name) ?? { count: 0, spend: 0, vat: 0, lastDate: "" };
     b.count += 1;
     b.spend += Number(i.total_incl_vat ?? 0);
     b.vat += Number(i.vat_amount ?? 0);
+    if (i.invoice_date && i.invoice_date > b.lastDate) b.lastDate = i.invoice_date;
     bySupplier.set(name, b);
   }
-  const supplierRows = [...bySupplier.entries()].sort((a, b) => b[1].spend - a[1].spend);
+  // latest-first, matching the invoices table below; spend breaks ties
+  const supplierRows = [...bySupplier.entries()].sort((a, b) =>
+    a[1].lastDate === b[1].lastDate
+      ? b[1].spend - a[1].spend
+      : a[1].lastDate < b[1].lastDate
+        ? 1
+        : -1,
+  );
 
   const exportHref = `/api/export?status=approved${from ? `&from=${from}` : ""}${to ? `&to=${to}` : ""}`;
 
