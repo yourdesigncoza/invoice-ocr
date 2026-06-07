@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminSupabase } from "@/lib/supabase/server";
+import { getUser } from "@/lib/auth-guards";
 import { normalizeName } from "@/lib/suppliers/matching";
 import { STORAGE_BUCKET, type InvoiceStatus } from "@/lib/constants";
 
@@ -14,6 +15,10 @@ export async function GET(
   _req: NextRequest,
   ctx: RouteContext<"/api/invoices/[id]">,
 ) {
+  if (!(await getUser()))
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!(await getUser()))
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
   const supabase = createAdminSupabase();
   if (!supabase)
@@ -63,6 +68,8 @@ export async function PATCH(
   req: NextRequest,
   ctx: RouteContext<"/api/invoices/[id]">,
 ) {
+  if (!(await getUser()))
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
   const supabase = createAdminSupabase();
   if (!supabase)
@@ -154,6 +161,8 @@ export async function DELETE(
   _req: NextRequest,
   ctx: RouteContext<"/api/invoices/[id]">,
 ) {
+  if (!(await getUser()))
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
   const supabase = createAdminSupabase();
   if (!supabase)

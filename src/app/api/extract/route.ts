@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { createAdminSupabase } from "@/lib/supabase/server";
+import { getUser } from "@/lib/auth-guards";
 import { processInvoice } from "@/lib/extraction";
 import { preprocessImage } from "@/lib/extraction/preprocess";
 import { findDuplicates } from "@/lib/duplicates/detect";
@@ -38,6 +39,10 @@ interface Job {
  *  `/api/uploads/status` (the DB is the source of truth) for completion.
  */
 export async function POST(req: NextRequest) {
+  const user = await getUser();
+  if (!user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const supabase = createAdminSupabase();
   if (!supabase)
     return NextResponse.json(

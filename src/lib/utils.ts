@@ -4,6 +4,26 @@ export function cn(...inputs: ClassValue[]) {
   return clsx(inputs);
 }
 
+/**
+ * Sanitise a post-auth `next` redirect target to a same-origin relative path —
+ * prevents open redirects (`//evil.com`, `/\evil.com`, `https://…`). Returns the
+ * fallback if the value isn't a plain in-app path.
+ */
+export function safeNextPath(
+  next: string | null | undefined,
+  fallback = "/dashboard",
+): string {
+  if (
+    typeof next === "string" &&
+    next.startsWith("/") &&
+    !next.startsWith("//") &&
+    !next.startsWith("/\\")
+  ) {
+    return next;
+  }
+  return fallback;
+}
+
 /** Format money in ZAR (or detected currency). PRD uses `R` symbol. */
 export function formatMoney(
   value: number | null | undefined,

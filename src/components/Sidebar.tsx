@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Upload,
@@ -15,10 +15,12 @@ import {
   Receipt,
   Menu,
   X,
+  LogOut,
   type LucideIcon,
 } from "lucide-react";
 import Image from "next/image";
 import { NAV } from "@/lib/constants";
+import { getBrowserSupabase } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 const ICONS: Record<string, LucideIcon> = {
@@ -76,14 +78,47 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-export function Sidebar() {
+/** Signed-in account row + sign-out, shared by rail and drawer. */
+function AccountFooter({
+  email,
+  onSignOut,
+}: {
+  email: string;
+  onSignOut: () => void;
+}) {
+  return (
+    <div className="border-t border-white/10 px-3 py-3">
+      {email && (
+        <div className="px-2 pb-2 text-xs text-slate-500 truncate" title={email}>
+          {email}
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={onSignOut}
+        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-400 transition-colors hover:bg-white/5 hover:text-slate-200"
+      >
+        <LogOut className="h-4 w-4 shrink-0" /> Sign out
+      </button>
+    </div>
+  );
+}
+
+export function Sidebar({ email }: { email: string }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
 
   // close the drawer whenever the route changes
   useEffect(() => {
     setOpen(false);
   }, [pathname]);
+
+  async function signOut() {
+    await getBrowserSupabase()?.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
 
   return (
     <>
@@ -95,9 +130,7 @@ export function Sidebar() {
         <nav className="flex-1 px-3 py-4 space-y-1">
           <NavLinks />
         </nav>
-        <div className="px-5 py-4 text-xs text-slate-500 border-t border-white/10">
-          Supplier spend intelligence
-        </div>
+        <AccountFooter email={email} onSignOut={signOut} />
       </aside>
 
       {/* MOBILE top bar */}
@@ -138,6 +171,7 @@ export function Sidebar() {
             <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
               <NavLinks onNavigate={() => setOpen(false)} />
             </nav>
+            <AccountFooter email={email} onSignOut={signOut} />
           </aside>
         </div>
       )}

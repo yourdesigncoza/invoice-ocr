@@ -1,5 +1,5 @@
 import "server-only";
-import { createAdminSupabase, isSupabaseConfigured } from "./supabase/server";
+import { createServerSupabase, isSupabaseConfigured } from "./supabase/server";
 import type {
   Invoice,
   InvoiceWithSupplier,
@@ -12,10 +12,11 @@ import { formatVat } from "./utils";
 
 export { isSupabaseConfigured };
 
-// MVP uses the service-role client for reads (no auth layer yet). Swap to the
-// cookie-bound client once roles (PRD §5) land.
-function db() {
-  return createAdminSupabase();
+// Reads run as the signed-in user via the cookie-bound client, so RLS scopes
+// every query to the caller (multi-tenant). Writes/admin paths use the
+// service-role client explicitly where needed.
+async function db() {
+  return createServerSupabase();
 }
 
 export interface InvoiceFilters {
@@ -30,7 +31,7 @@ export interface InvoiceFilters {
 export async function getInvoices(
   filters: InvoiceFilters = {},
 ): Promise<InvoiceWithSupplier[]> {
-  const supabase = db();
+  const supabase = await db();
   if (!supabase) return [];
   let q = supabase
     .from("invoices")
@@ -73,7 +74,7 @@ function flattenDuplicateCount(row: Record<string, unknown>): unknown {
 export async function getInvoice(
   id: string,
 ): Promise<{ invoice: InvoiceWithSupplier; items: InvoiceItem[] } | null> {
-  const supabase = db();
+  const supabase = await db();
   if (!supabase) return null;
   const { data: invoice } = await supabase
     .from("invoices")
@@ -100,7 +101,7 @@ export async function getSuppliers(): Promise<
     vat_numbers: string[];
   })[]
 > {
-  const supabase = db();
+  const supabase = await db();
   if (!supabase) return [];
   const { data: suppliers } = await supabase.from("suppliers").select("*");
   if (!suppliers) return [];
@@ -144,7 +145,7 @@ export async function getSuppliers(): Promise<
 }
 
 export async function getSupplier(id: string): Promise<Supplier | null> {
-  const supabase = db();
+  const supabase = await db();
   if (!supabase) return null;
   const { data } = await supabase.from("suppliers").select("*").eq("id", id).single();
   return (data as Supplier) ?? null;
@@ -156,7 +157,7 @@ export async function getOpenDuplicates(): Promise<
     possible_duplicate: Invoice | null;
   })[]
 > {
-  const supabase = db();
+  const supabase = await db();
   if (!supabase) return [];
   const { data } = await supabase
     .from("duplicate_checks")
@@ -184,7 +185,7 @@ export async function getDashboard(
   from?: string,
   to?: string,
 ): Promise<DashboardData | null> {
-  const supabase = db();
+  const supabase = await db();
   if (!supabase) return null;
 
   let approvedQ = supabase

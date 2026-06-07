@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getInvoices } from "@/lib/data";
+import { getUser } from "@/lib/auth-guards";
 import { toCsv, invoicesToRows, vatSummaryRows } from "@/lib/export/csv";
 import type { InvoiceStatus } from "@/lib/constants";
 
@@ -12,6 +13,8 @@ export const runtime = "nodejs";
  *   /api/export?type=vat_summary&status=approved&from=2026-03-01&to=2026-04-30
  */
 export async function GET(req: NextRequest) {
+  if (!(await getUser()))
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const sp = req.nextUrl.searchParams;
   const status = sp.get("status") as InvoiceStatus | null;
   const type = sp.get("type");
