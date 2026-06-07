@@ -11,6 +11,11 @@
   --primary: #2563eb; /* modern blue */
   --accent: #06b6d4; /* cyan */
 
+  /* SpendSilo brand colours (the three silo bars) */
+  --brand-blue: #30bced;
+  --brand-green: #4bd5b1;
+  --brand-yellow: #fcba04;
+
   /* status colours (PRD §10.2) */
   --status-approved: #16a34a;
   --status-review: #f59e0b;
@@ -29,6 +34,10 @@
   --color-muted: var(--muted);
   --color-primary: var(--primary);
   --color-accent: var(--accent);
+
+  --color-brand-blue: var(--brand-blue);
+  --color-brand-green: var(--brand-green);
+  --color-brand-yellow: var(--brand-yellow);
 
   --color-status-approved: var(--status-approved);
   --color-status-review: var(--status-review);

@@ -14,6 +14,7 @@ import {
   Receipt,
   type LucideIcon,
 } from "lucide-react";
+import Image from "next/image";
 import { NAV } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -33,9 +34,16 @@ export function Sidebar() {
 
   return (
     <aside className="hidden md:flex md:w-60 md:flex-col bg-sidebar text-slate-300 shrink-0">
-      <div className="flex items-center gap-2 px-5 h-16 border-b border-white/10">
-        <Receipt className="h-5 w-5 text-accent" />
-        <span className="font-semibold text-white tracking-tight">InvoiceIQ</span>
+      <div className="flex items-center gap-2.5 px-5 py-6 border-b border-white/10">
+        <Image
+          src="/spendsilo_mark.png"
+          alt="SpendSilo"
+          width={33}
+          height={36}
+          priority
+          className="h-9 w-auto"
+        />
+        <span className="font-bold text-white tracking-tight text-xl">SpendSilo</span>
       </div>
       <nav className="flex-1 px-3 py-4 space-y-1">
         {NAV.map((item) => {
