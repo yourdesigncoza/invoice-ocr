@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { createAdminSupabase } from "@/lib/supabase/server";
 import { processInvoice } from "@/lib/extraction";
 import { preprocessImage } from "@/lib/extraction/preprocess";
@@ -6,15 +6,36 @@ import { findDuplicates } from "@/lib/duplicates/detect";
 import { STORAGE_BUCKET } from "@/lib/constants";
 
 export const runtime = "nodejs";
-export const maxDuration = 60; // vision calls can be slow
+export const maxDuration = 300; // background vision work continues after the response
 
 const ACCEPTED = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
 
+type Supabase = NonNullable<ReturnType<typeof createAdminSupabase>>;
+
+// a file that was stored and queued; carries the in-memory buffer into the
+// background phase so we don't re-read the (already-consumed) request body
+interface Job {
+  uploadId: string;
+  docId: string;
+  fileName: string;
+  objectPath: string;
+  dir: string;
+  buffer: Buffer;
+  mimeType: string;
+}
+
 /**
- * Ingest one or more invoice files (PRD §4.4 pipeline). Per file:
- *  store original (untouched) → extract → validate → persist invoice +
- *  extraction_log → duplicate check. Each file is independent; one failure
- *  doesn't sink the batch.
+ * Ingest one or more invoice files (PRD §4.4 pipeline), now **async**:
+ *
+ *  Phase 1 (blocking, fast): validate + store the untouched original + create a
+ *  `document_uploads` row with status 'processing'. Returns immediately so the
+ *  client can redirect and show a "Processing…" notification.
+ *
+ *  Phase 2 (`after()`, background): preprocess → vision extract → persist
+ *  invoice + extraction_log → duplicate check → flip the upload to
+ *  'done'/'failed'. Runs after the response is flushed on Fluid Compute, so it
+ *  survives the client navigating away or closing the app. The client polls
+ *  `/api/uploads/status` (the DB is the source of truth) for completion.
  */
 export async function POST(req: NextRequest) {
   const supabase = createAdminSupabase();
@@ -29,47 +50,51 @@ export async function POST(req: NextRequest) {
   if (files.length === 0)
     return NextResponse.json({ error: "No files provided" }, { status: 400 });
 
-  const results = [];
+  // Phase 1 — store originals + create processing rows (fast)
+  const jobs: Job[] = [];
+  const uploads: { id: string | null; fileName: string; ok: boolean; error?: string }[] = [];
   for (const file of files) {
-    results.push(await ingestOne(supabase, file));
+    const stored = await storeOriginal(supabase, file);
+    if ("error" in stored) {
+      uploads.push({ id: null, fileName: stored.fileName, ok: false, error: stored.error });
+    } else {
+      jobs.push(stored);
+      uploads.push({ id: stored.uploadId, fileName: stored.fileName, ok: true });
+    }
   }
-  return NextResponse.json({ results });
+
+  // Phase 2 — heavy processing, after the response is sent
+  if (jobs.length) {
+    after(async () => {
+      for (const job of jobs) {
+        await processStored(supabase, job);
+      }
+    });
+  }
+
+  return NextResponse.json({ uploads });
 }
 
-async function ingestOne(
-  supabase: NonNullable<ReturnType<typeof createAdminSupabase>>,
+async function storeOriginal(
+  supabase: Supabase,
   file: File,
-) {
+): Promise<Job | { fileName: string; error: string }> {
   const fileName = file.name || "upload";
   if (!ACCEPTED.includes(file.type)) {
-    return { fileName, ok: false, error: `Unsupported type: ${file.type}` };
+    return { fileName, error: `Unsupported type: ${file.type}` };
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const dir = crypto.randomUUID();
   const objectPath = `${dir}/${sanitize(fileName)}`;
 
-  // 1. store the original, untouched (PRD §4.5)
+  // store the original, untouched (PRD §4.5)
   const up = await supabase.storage
     .from(STORAGE_BUCKET)
     .upload(objectPath, buffer, { contentType: file.type, upsert: false });
-  if (up.error)
-    return { fileName, ok: false, error: `Storage: ${up.error.message}` };
+  if (up.error) return { fileName, error: `Storage: ${up.error.message}` };
 
-  // 1b. preprocess (downscale large images / auto-orient). Extraction runs on
-  // the result to cut vision token cost + latency. Only large images are
-  // re-encoded; already-small photos pass through untouched (no inflation), so
-  // we only store a processed companion when an actual resize happened.
-  const pre = await preprocessImage(buffer, file.type);
-  let processedPath: string | null = null;
-  if (pre.resized) {
-    processedPath = `${dir}/processed.jpg`;
-    await supabase.storage
-      .from(STORAGE_BUCKET)
-      .upload(processedPath, pre.data, { contentType: pre.mimeType, upsert: true });
-  }
-
-  const { data: doc } = await supabase
+  const { data: doc, error: docErr } = await supabase
     .from("document_uploads")
     .insert({
       file_name: fileName,
@@ -80,16 +105,41 @@ async function ingestOne(
     })
     .select("id")
     .single();
+  if (docErr || !doc) return { fileName, error: `DB: ${docErr?.message ?? "insert failed"}` };
 
-  // 2. extract (from the preprocessed image)
+  return {
+    uploadId: doc.id,
+    docId: doc.id,
+    fileName,
+    objectPath,
+    dir,
+    buffer,
+    mimeType: file.type,
+  };
+}
+
+async function processStored(supabase: Supabase, job: Job) {
+  const { docId, fileName, objectPath, dir, buffer, mimeType } = job;
   try {
+    // preprocess (downscale large images / auto-orient) — only store a processed
+    // companion when an actual resize happened (PRD §4.5)
+    const pre = await preprocessImage(buffer, mimeType);
+    let processedPath: string | null = null;
+    if (pre.resized) {
+      processedPath = `${dir}/processed.jpg`;
+      await supabase.storage
+        .from(STORAGE_BUCKET)
+        .upload(processedPath, pre.data, { contentType: pre.mimeType, upsert: true });
+    }
+
+    // extract (from the preprocessed image)
     const processed = await processInvoice({
       data: pre.data,
       mimeType: pre.mimeType,
       fileName,
     });
 
-    // 3. persist invoice
+    // persist invoice
     const { data: invoice, error: invErr } = await supabase
       .from("invoices")
       .insert({
@@ -101,7 +151,6 @@ async function ingestOne(
       .single();
     if (invErr) throw new Error(invErr.message);
 
-    // line items
     if (processed.extraction.line_items.length) {
       await supabase.from("invoice_items").insert(
         processed.extraction.line_items.map((li) => ({
@@ -113,7 +162,7 @@ async function ingestOne(
 
     // extraction_log (raw text kept separate from structured json, PRD §7.3.1)
     await supabase.from("extraction_logs").insert({
-      document_upload_id: doc?.id ?? null,
+      document_upload_id: docId,
       invoice_id: invoice.id,
       provider_name: processed.providerName,
       provider_model: processed.providerModel,
@@ -126,7 +175,7 @@ async function ingestOne(
       processing_duration_ms: processed.durationMs,
     });
 
-    // 4. duplicate check before approval (PRD §7.10)
+    // duplicate check before approval (PRD §7.10)
     const dupes = await findDuplicates(supabase, {
       id: invoice.id,
       supplier_id: invoice.supplier_id,
@@ -148,30 +197,19 @@ async function ingestOne(
     await supabase
       .from("document_uploads")
       .update({ upload_status: "done", invoice_id: invoice.id })
-      .eq("id", doc?.id ?? "");
-
-    return {
-      fileName,
-      ok: true,
-      invoiceId: invoice.id,
-      status: processed.status,
-      confidence: processed.confidence,
-      warnings: processed.warnings,
-      possibleDuplicates: dupes.length,
-    };
+      .eq("id", docId);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await supabase
       .from("document_uploads")
       .update({ upload_status: "failed" })
-      .eq("id", doc?.id ?? "");
+      .eq("id", docId);
     await supabase.from("extraction_logs").insert({
-      document_upload_id: doc?.id ?? null,
+      document_upload_id: docId,
       provider_name: "openai_vision",
       errors: [message],
       warnings: [],
     });
-    return { fileName, ok: false, error: message };
   }
 }
 

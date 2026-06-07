@@ -4,64 +4,74 @@ import { useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   UploadCloud,
-  FileCheck2,
   FileX2,
   Loader2,
   Camera,
   FolderOpen,
 } from "lucide-react";
-import { Card, Button } from "@/components/ui";
-import { StatusBadge } from "@/components/StatusBadge";
+import { Card } from "@/components/ui";
+import { useUploadNotifications } from "@/components/UploadNotifications";
 import { compressImage } from "@/lib/image/compress";
-import { cn, formatPct } from "@/lib/utils";
-import type { InvoiceStatus } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 
-interface FileResult {
+interface UploadResult {
+  id: string | null;
   fileName: string;
   ok: boolean;
-  invoiceId?: string;
-  status?: InvoiceStatus;
-  confidence?: number;
-  warnings?: string[];
-  possibleDuplicates?: number;
   error?: string;
 }
 
 export function UploadClient() {
   const router = useRouter();
+  const notify = useUploadNotifications();
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [results, setResults] = useState<FileResult[]>([]);
+  const [errors, setErrors] = useState<{ fileName: string; error?: string }[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
-  const upload = useCallback(async (files: FileList | File[]) => {
-    const list = Array.from(files);
-    if (list.length === 0) return;
-    setBusy(true);
-    setResults([]);
-    try {
-      // shrink phone photos on-device before upload (Vercel 4.5 MB body limit
-      // + faster on mobile data); PDFs/small images pass through unchanged
-      const prepared = await Promise.all(list.map(compressImage));
-      const form = new FormData();
-      prepared.forEach((f) => form.append("files", f));
-      const res = await fetch("/api/extract", { method: "POST", body: form });
-      const json = await res.json();
-      if (!res.ok) {
-        setResults([{ fileName: "Request failed", ok: false, error: json.error }]);
-      } else {
-        setResults(json.results ?? []);
-        router.refresh();
+  const upload = useCallback(
+    async (files: FileList | File[]) => {
+      const list = Array.from(files);
+      if (list.length === 0) return;
+      setBusy(true);
+      setErrors([]);
+      try {
+        // shrink phone photos on-device before upload (Vercel body limit +
+        // faster on mobile data); PDFs/small images pass through unchanged
+        const prepared = await Promise.all(list.map(compressImage));
+        const form = new FormData();
+        prepared.forEach((f) => form.append("files", f));
+
+        // returns fast: files are stored + queued, extraction runs in the
+        // background. We register the jobs for toast tracking and head to the
+        // dashboard rather than blocking on the vision call.
+        const res = await fetch("/api/extract", { method: "POST", body: form });
+        const json = await res.json();
+        if (!res.ok) {
+          setErrors([{ fileName: "Upload failed", error: json.error }]);
+          return;
+        }
+        const uploads: UploadResult[] = json.uploads ?? [];
+        const failed = uploads.filter((u) => !u.ok);
+        const ok = uploads.filter((u) => u.ok);
+
+        notify.startJobs(ok);
+
+        if (ok.length && !failed.length) {
+          router.push("/dashboard");
+          return;
+        }
+        if (failed.length)
+          setErrors(failed.map((f) => ({ fileName: f.fileName, error: f.error })));
+      } catch (e) {
+        setErrors([{ fileName: "Upload error", error: String(e) }]);
+      } finally {
+        setBusy(false);
       }
-    } catch (e) {
-      setResults([
-        { fileName: "Upload error", ok: false, error: String(e) },
-      ]);
-    } finally {
-      setBusy(false);
-    }
-  }, [router]);
+    },
+    [router, notify],
+  );
 
   return (
     <div className="space-y-6">
@@ -103,6 +113,15 @@ export function UploadClient() {
         </button>
       </div>
 
+      {/* upload progress — visible on every screen size (the heavy extraction
+          continues in the background; we redirect to the dashboard once queued) */}
+      {busy && (
+        <div className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-foreground">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          Uploading & queuing for extraction…
+        </div>
+      )}
+
       {/* drag & drop — desktop convenience */}
       <Card
         className={cn(
@@ -131,7 +150,7 @@ export function UploadClient() {
           )}
           <div>
             <p className="text-sm font-medium text-foreground">
-              {busy ? "Extracting…" : "Drag & drop invoices here"}
+              {busy ? "Queuing…" : "Drag & drop invoices here"}
             </p>
             <p className="text-xs text-muted mt-0.5">
               JPG, PNG, WEBP, or PDF · single or batch · photos shrink before upload
@@ -140,48 +159,15 @@ export function UploadClient() {
         </div>
       </Card>
 
-      {results.length > 0 && (
+      {errors.length > 0 && (
         <Card className="divide-y divide-border">
-          {results.map((r, i) => (
+          {errors.map((e, i) => (
             <div key={i} className="flex items-start gap-3 p-4">
-              {r.ok ? (
-                <FileCheck2 className="h-5 w-5 text-status-approved shrink-0 mt-0.5" />
-              ) : (
-                <FileX2 className="h-5 w-5 text-status-low shrink-0 mt-0.5" />
-              )}
+              <FileX2 className="h-5 w-5 text-status-low shrink-0 mt-0.5" />
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-medium truncate">{r.fileName}</span>
-                  {r.status && <StatusBadge status={r.status} />}
-                  {typeof r.confidence === "number" && (
-                    <span className="text-xs text-muted">
-                      {formatPct(r.confidence)} confidence
-                    </span>
-                  )}
-                  {!!r.possibleDuplicates && (
-                    <span className="text-xs text-status-duplicate font-medium">
-                      {r.possibleDuplicates} possible duplicate(s)
-                    </span>
-                  )}
-                </div>
-                {r.error && (
-                  <p className="text-xs text-status-low mt-1">{r.error}</p>
-                )}
-                {r.warnings && r.warnings.length > 0 && (
-                  <ul className="mt-1 text-xs text-muted list-disc list-inside">
-                    {r.warnings.slice(0, 3).map((w, j) => (
-                      <li key={j}>{w}</li>
-                    ))}
-                  </ul>
-                )}
-                {r.ok && r.invoiceId && (
-                  <Button
-                    href={`/review/${r.invoiceId}`}
-                    variant="ghost"
-                    className="mt-2 !py-1 !px-2.5 text-xs"
-                  >
-                    Review →
-                  </Button>
+                <div className="text-sm font-medium truncate">{e.fileName}</div>
+                {e.error && (
+                  <p className="text-xs text-status-low mt-1">{e.error}</p>
                 )}
               </div>
             </div>
