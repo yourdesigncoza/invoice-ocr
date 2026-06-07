@@ -11,6 +11,7 @@ import {
   Pencil,
   Save,
   ChevronDown,
+  ChevronRight,
   Phone,
 } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -222,9 +223,10 @@ export function InvoiceModal({ invoice }: { invoice: InvoiceWithSupplier }) {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="text-primary text-xs font-medium hover:underline"
+        className="group/view inline-flex items-center gap-0.5 rounded-md px-2 py-1 text-xs font-semibold text-[#1572a8] transition-colors hover:bg-brand-blue/10 hover:text-[#106191]"
       >
         View
+        <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover/view:translate-x-0.5" />
       </button>
 
       {open && (

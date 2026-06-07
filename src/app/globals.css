@@ -47,12 +47,29 @@
   --color-status-rejected: var(--status-rejected);
 
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  /* premium elevation — soft, layered, low-spread (Airtable/Linear feel) */
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.05);
+  --shadow-card-hover: 0 2px 4px rgba(15, 23, 42, 0.05), 0 6px 16px rgba(15, 23, 42, 0.08);
+  --shadow-pop: 0 12px 40px rgba(15, 23, 42, 0.14);
+}
+
+/* denser than browser default: scales rem-based type AND spacing together */
+html {
+  font-size: 14px;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* brand-tinted text selection */
+::selection {
+  background: rgba(48, 188, 237, 0.22);
 }
 
 /* thin slate scrollbars to keep the finance-tool feel */

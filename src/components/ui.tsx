@@ -33,7 +33,7 @@ export function Card({
   return (
     <div
       className={cn(
-        "rounded-xl border border-border bg-surface",
+        "rounded-xl border border-border bg-surface shadow-card",
         className,
       )}
     >
@@ -54,18 +54,18 @@ export function StatCard({
   accent?: string;
 }) {
   return (
-    <Card className="px-3 py-2">
-      <div className="text-[10px] font-medium text-muted uppercase tracking-wide truncate">
+    <Card className="group px-3.5 py-2.5 transition-all duration-200 hover:-translate-y-0.5 hover:border-brand-blue/40 hover:shadow-card-hover">
+      <div className="text-[10px] font-semibold text-muted uppercase tracking-[0.06em] truncate">
         {label}
       </div>
       <div
-        className="mt-0.5 text-base font-semibold tabular-nums truncate leading-tight"
+        className="mt-1 text-lg font-semibold tabular-nums truncate leading-tight tracking-tight"
         title={typeof value === "string" ? value : undefined}
         style={accent ? { color: accent } : undefined}
       >
         {value}
       </div>
-      {hint && <div className="text-[10px] text-muted truncate">{hint}</div>}
+      {hint && <div className="mt-0.5 text-[10px] text-muted truncate">{hint}</div>}
     </Card>
   );
 }
@@ -109,14 +109,22 @@ export function Button({
 }: {
   href?: string;
   children: React.ReactNode;
-  variant?: "primary" | "ghost";
+  variant?: "primary" | "ghost" | "subtle";
   className?: string;
 } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  const variants = {
+    // solid navy — matches the sidebar; flat, no gradient or glow
+    primary:
+      "bg-sidebar text-white hover:bg-[#1e293b] active:translate-y-px",
+    ghost:
+      "border border-border bg-surface text-foreground hover:bg-slate-50 hover:border-slate-300",
+    // quiet inline action (links, View) — brand-cyan accent on a soft hover wash
+    subtle:
+      "text-[#1572a8] hover:bg-brand-blue/10 hover:text-[#106191]",
+  } as const;
   const cls = cn(
-    "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none",
-    variant === "primary"
-      ? "bg-primary text-white hover:bg-blue-700"
-      : "border border-border bg-surface text-foreground hover:bg-slate-50",
+    "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-medium transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none",
+    variants[variant],
     className,
   );
   if (href)

@@ -62,13 +62,17 @@ export default async function DashboardPage() {
       </div>
 
       {(data?.pendingReview ?? 0) > 0 && (
-        <Card className="mt-6 p-4 flex items-center gap-3 border-amber-200 bg-amber-50/60">
+        <Card className="mt-6 p-4 flex items-center gap-3 border-brand-yellow/40 bg-brand-yellow/[0.08]">
           <AlertTriangle className="h-5 w-5 text-status-review shrink-0" />
           <div className="text-sm text-foreground">
-            <span className="font-medium">{data?.pendingReview} document(s)</span>{" "}
+            <span className="font-semibold">{data?.pendingReview} document(s)</span>{" "}
             waiting for review.{" "}
-            <Link href="/review" className="text-primary font-medium hover:underline">
-              Open the review queue →
+            <Link
+              href="/review"
+              className="group/link inline-flex items-center gap-1 font-semibold text-[#1572a8] transition-colors hover:text-[#106191]"
+            >
+              Open the review queue
+              <span className="transition-transform group-hover/link:translate-x-0.5">→</span>
             </Link>
           </div>
         </Card>
@@ -78,45 +82,79 @@ export default async function DashboardPage() {
         Recent invoices
       </h2>
       <Card className="overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-muted">
-            <tr>
-              <th className="px-4 py-2.5 font-medium">Status</th>
-              <th className="px-4 py-2.5 font-medium">Date</th>
-              <th className="px-4 py-2.5 font-medium">Supplier</th>
-              <th className="px-4 py-2.5 font-medium text-right">Total</th>
-              <th className="px-4 py-2.5"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {recent.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-muted">
-                  No invoices yet — upload your first batch.
-                </td>
-              </tr>
-            )}
-            {recent.map((inv) => (
-              <tr key={inv.id} className="hover:bg-slate-50">
-                <td className="px-4 py-2.5">
-                  <StatusBadge status={inv.status} />
-                </td>
-                <td className="px-4 py-2.5 text-muted">{formatDate(inv.invoice_date)}</td>
-                <td className="px-4 py-2.5">
-                  {inv.supplier?.supplier_name ||
-                    inv.original_supplier_name ||
-                    "Unknown supplier"}
-                </td>
-                <td className="px-4 py-2.5 text-right tabular-nums font-medium">
-                  {formatMoney(inv.total_incl_vat, inv.currency_code)}
-                </td>
-                <td className="px-4 py-2.5 text-right">
-                  <InvoiceModal invoice={inv} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {recent.length === 0 ? (
+          <div className="px-4 py-8 text-center text-muted">
+            No invoices yet — upload your first batch.
+          </div>
+        ) : (
+          <>
+            {/* desktop: full table */}
+            <table className="hidden w-full text-sm md:table">
+              <thead className="border-b border-border bg-slate-50/60 text-left">
+                <tr className="[&>th]:px-3.5 [&>th]:py-2 [&>th]:text-[11px] [&>th]:font-semibold [&>th]:uppercase [&>th]:tracking-[0.05em] [&>th]:text-muted">
+                  <th>Status</th>
+                  <th>Date</th>
+                  <th>Supplier</th>
+                  <th className="text-right">Total</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/70">
+                {recent.map((inv) => (
+                  <tr
+                    key={inv.id}
+                    className="transition-colors hover:bg-brand-blue/[0.04]"
+                  >
+                    <td className="px-3.5 py-2">
+                      <StatusBadge status={inv.status} />
+                    </td>
+                    <td className="px-3.5 py-2 text-muted">{formatDate(inv.invoice_date)}</td>
+                    <td className="px-3.5 py-2 font-medium">
+                      {inv.supplier?.supplier_name ||
+                        inv.original_supplier_name ||
+                        "Unknown supplier"}
+                    </td>
+                    <td className="px-3.5 py-2 text-right tabular-nums font-semibold">
+                      {formatMoney(inv.total_incl_vat, inv.currency_code)}
+                    </td>
+                    <td className="px-3.5 py-2 text-right">
+                      <InvoiceModal invoice={inv} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* mobile: stacked cards */}
+            <div className="divide-y divide-border md:hidden">
+              {recent.map((inv) => (
+                <div key={inv.id} className="flex items-start gap-3 p-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <StatusBadge status={inv.status} />
+                      <span className="text-sm font-medium">
+                        {inv.supplier?.supplier_name ||
+                          inv.original_supplier_name ||
+                          "Unknown supplier"}
+                      </span>
+                    </div>
+                    <div className="text-xs text-muted mt-1">
+                      {formatDate(inv.invoice_date)}
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end shrink-0">
+                    <span className="text-sm font-semibold tabular-nums">
+                      {formatMoney(inv.total_incl_vat, inv.currency_code)}
+                    </span>
+                    <div className="mt-1">
+                      <InvoiceModal invoice={inv} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </Card>
     </>
   );

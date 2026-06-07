@@ -4,13 +4,14 @@ export function StatusBadge({ status }: { status: InvoiceStatus }) {
   const meta = STATUS_META[status] ?? STATUS_META.processing;
   return (
     <span
-      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap"
-      style={{ color: meta.color, backgroundColor: meta.bg }}
+      className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap"
+      style={{
+        color: meta.color,
+        backgroundColor: meta.bg,
+        // crisp Airtable-style hairline in the status colour, very low opacity
+        boxShadow: `inset 0 0 0 1px ${meta.color}26`,
+      }}
     >
-      <span
-        className="mr-1.5 h-1.5 w-1.5 rounded-full"
-        style={{ backgroundColor: meta.color }}
-      />
       {meta.label}
     </span>
   );
