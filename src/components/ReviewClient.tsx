@@ -12,6 +12,7 @@ import {
   Loader2,
   AlertTriangle,
   ExternalLink,
+  Trash2,
 } from "lucide-react";
 import { Card, Button } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -72,6 +73,7 @@ export function ReviewClient({
   const [corrected, setCorrected] = useState<Set<string>>(new Set());
   const [supplierId, setSupplierId] = useState<string | null>(invoice.supplier_id);
   const [busy, setBusy] = useState<Action | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const dirty = corrected.size > 0 || supplierId !== invoice.supplier_id;
@@ -122,6 +124,29 @@ export function ReviewClient({
     }
   }
 
+  const locked = busy !== null || deleting;
+
+  async function remove() {
+    if (
+      !window.confirm(
+        "Permanently delete this invoice and its file? This cannot be undone.",
+      )
+    )
+      return;
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/invoices/${invoice.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Delete failed");
+      router.push("/review");
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setDeleting(false);
+    }
+  }
+
   async function createSupplier() {
     const name = values.original_supplier_name?.trim();
     if (!name) return;
@@ -136,10 +161,10 @@ export function ReviewClient({
 
   return (
     <div className="h-[calc(100vh-4rem)] -mx-6 -my-8 flex flex-col">
-      {/* header bar */}
-      <div className="flex items-center justify-between gap-4 px-6 py-3 border-b border-border bg-surface">
-        <div className="flex items-center gap-3 min-w-0">
-          <Link href="/review" className="text-sm text-muted hover:text-foreground">
+      {/* header bar — stacks to two rows on mobile, single row on desktop */}
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between md:gap-4 px-4 md:px-6 py-3 border-b border-border bg-surface">
+        <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-wrap">
+          <Link href="/review" className="text-sm text-muted hover:text-foreground shrink-0">
             ← Queue
           </Link>
           <StatusBadge status={invoice.status as InvoiceStatus} />
@@ -150,14 +175,15 @@ export function ReviewClient({
             variant="ghost"
             onClick={() => run("save")}
             disabled={busy !== null || !dirty}
+            className="flex-1 md:flex-none justify-center"
           >
             {busy === "save" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Save
           </Button>
           <Button
             onClick={() => run("approve")}
-            disabled={busy !== null}
-            className="!bg-status-approved hover:!bg-green-700"
+            disabled={locked}
+            className="flex-1 md:flex-none justify-center !bg-status-approved hover:!bg-green-700"
           >
             {busy === "approve" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
             Approve
@@ -272,7 +298,7 @@ export function ReviewClient({
                       </option>
                     ))}
                   </select>
-                  <Button variant="ghost" onClick={createSupplier} disabled={busy !== null}>
+                  <Button variant="ghost" onClick={createSupplier} disabled={locked}>
                     Create new
                   </Button>
                 </div>
@@ -346,19 +372,32 @@ export function ReviewClient({
 
           {/* secondary actions */}
           <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
-            <Button variant="ghost" onClick={() => run("mark_duplicate")} disabled={busy !== null}>
+            <Button variant="ghost" onClick={() => run("mark_duplicate")} disabled={locked}>
               <Copy className="h-4 w-4" /> Mark duplicate
             </Button>
-            <Button variant="ghost" onClick={() => run("not_invoice")} disabled={busy !== null}>
+            <Button variant="ghost" onClick={() => run("not_invoice")} disabled={locked}>
               <Ban className="h-4 w-4" /> Not an invoice
             </Button>
             <Button
               variant="ghost"
               onClick={() => run("reject")}
-              disabled={busy !== null}
+              disabled={locked}
               className="!text-status-low"
             >
               <X className="h-4 w-4" /> Reject
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={remove}
+              disabled={locked}
+              className="!text-status-low ml-auto"
+            >
+              {deleting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+              Delete
             </Button>
           </div>
         </div>

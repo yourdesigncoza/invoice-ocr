@@ -143,3 +143,56 @@ export async function PATCH(
 
   return NextResponse.json({ ok: true, invoice: after });
 }
+
+/**
+ * Hard delete: permanently removes the invoice row, its Storage file(s), and
+ * (via ON DELETE CASCADE) its items / extraction_fields / duplicate_checks.
+ * extraction_logs + document_uploads keep their rows with invoice_id nulled.
+ * Unlike `reject` (a soft status change), this is irreversible — so we write
+ * the audit_logs record *before* deleting, capturing the full prior state
+ * (PRD §13.3). audit_logs.entity_id has no FK, so the trail survives the row.
+ */
+export async function DELETE(
+  _req: NextRequest,
+  ctx: RouteContext<"/api/invoices/[id]">,
+) {
+  const { id } = await ctx.params;
+  const supabase = createAdminSupabase();
+  if (!supabase)
+    return NextResponse.json({ error: "Supabase not configured" }, { status: 503 });
+
+  const { data: before } = await supabase
+    .from("invoices")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (!before)
+    return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+
+  // audit first — irreversible action, record prior state before it's gone
+  await supabase.from("audit_logs").insert({
+    action: "delete",
+    entity_type: "invoice",
+    entity_id: id,
+    old_value: before,
+    new_value: null,
+  });
+
+  // remove stored file(s); original + processed may be the same or null
+  const paths = [
+    ...new Set(
+      [before.original_file_path, before.processed_file_path].filter(
+        (p): p is string => Boolean(p),
+      ),
+    ),
+  ];
+  if (paths.length) {
+    await supabase.storage.from(STORAGE_BUCKET).remove(paths);
+  }
+
+  const { error: delErr } = await supabase.from("invoices").delete().eq("id", id);
+  if (delErr)
+    return NextResponse.json({ error: delErr.message }, { status: 400 });
+
+  return NextResponse.json({ ok: true });
+}
