@@ -3,6 +3,7 @@ import { getInvoices, isSupabaseConfigured } from "@/lib/data";
 import { bucketKey, bucketRange, type GroupBy } from "@/lib/periods";
 import { ChevronRight } from "lucide-react";
 import { PageHeader, NotConfigured, Card } from "@/components/ui";
+import { ReportCustomRange } from "@/components/ReportCustomRange";
 import { formatMoney, cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -11,8 +12,10 @@ const GROUPS: GroupBy[] = ["day", "week", "month", "quarter", "year"];
 
 export default async function ReportsPage(props: PageProps<"/reports">) {
   const sp = await props.searchParams;
-  const group = (typeof sp.group === "string" && GROUPS.includes(sp.group as GroupBy)
-    ? sp.group
+  const groupParam = typeof sp.group === "string" ? sp.group : "month";
+  const isCustom = groupParam === "custom";
+  const group = (GROUPS.includes(groupParam as GroupBy)
+    ? groupParam
     : "month") as GroupBy;
 
   if (!isSupabaseConfigured()) {
@@ -20,6 +23,34 @@ export default async function ReportsPage(props: PageProps<"/reports">) {
       <>
         <PageHeader title="Reports" />
         <NotConfigured />
+      </>
+    );
+  }
+
+  const tabClass = (active: boolean) =>
+    cn(
+      "rounded-lg px-3 py-1.5 text-sm capitalize transition-colors",
+      active ? "bg-foreground text-white" : "text-muted hover:bg-slate-100",
+    );
+  const tabs = (
+    <div className="flex items-center gap-1 mb-4">
+      {GROUPS.map((g) => (
+        <Link key={g} href={`/reports?group=${g}`} className={tabClass(!isCustom && g === group)}>
+          {g}
+        </Link>
+      ))}
+      <Link href="/reports?group=custom" className={tabClass(isCustom)}>
+        Custom
+      </Link>
+    </div>
+  );
+
+  if (isCustom) {
+    return (
+      <>
+        <PageHeader title="Reports" subtitle="Approved spend by time period (PRD §7.8)" />
+        {tabs}
+        <ReportCustomRange />
       </>
     );
   }
@@ -71,20 +102,7 @@ export default async function ReportsPage(props: PageProps<"/reports">) {
         }
       />
 
-      <div className="flex items-center gap-1 mb-4">
-        {GROUPS.map((g) => (
-          <Link
-            key={g}
-            href={`/reports?group=${g}`}
-            className={cn(
-              "rounded-lg px-3 py-1.5 text-sm capitalize transition-colors",
-              g === group ? "bg-foreground text-white" : "text-muted hover:bg-slate-100",
-            )}
-          >
-            {g}
-          </Link>
-        ))}
-      </div>
+      {tabs}
 
       <Card className="overflow-hidden">
         <table className="w-full text-sm">
