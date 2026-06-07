@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getDashboard, getInvoices, isSupabaseConfigured } from "@/lib/data";
 import { PageHeader, StatCard, Card, NotConfigured, Button } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
+import { InvoiceModal } from "@/components/InvoiceModal";
 import { formatMoney, formatDate } from "@/lib/utils";
 import { AlertTriangle, Upload } from "lucide-react";
 
@@ -84,12 +85,13 @@ export default async function DashboardPage() {
               <th className="px-4 py-2.5 font-medium">Date</th>
               <th className="px-4 py-2.5 font-medium">Supplier</th>
               <th className="px-4 py-2.5 font-medium text-right">Total</th>
+              <th className="px-4 py-2.5"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {recent.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-muted">
+                <td colSpan={5} className="px-4 py-8 text-center text-muted">
                   No invoices yet — upload your first batch.
                 </td>
               </tr>
@@ -101,14 +103,15 @@ export default async function DashboardPage() {
                 </td>
                 <td className="px-4 py-2.5 text-muted">{formatDate(inv.invoice_date)}</td>
                 <td className="px-4 py-2.5">
-                  <Link href={`/review/${inv.id}`} className="hover:text-primary">
-                    {inv.supplier?.supplier_name ||
-                      inv.original_supplier_name ||
-                      "Unknown supplier"}
-                  </Link>
+                  {inv.supplier?.supplier_name ||
+                    inv.original_supplier_name ||
+                    "Unknown supplier"}
                 </td>
                 <td className="px-4 py-2.5 text-right tabular-nums font-medium">
                   {formatMoney(inv.total_incl_vat, inv.currency_code)}
+                </td>
+                <td className="px-4 py-2.5 text-right">
+                  <InvoiceModal invoice={inv} />
                 </td>
               </tr>
             ))}
