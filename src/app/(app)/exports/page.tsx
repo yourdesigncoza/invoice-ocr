@@ -1,4 +1,5 @@
 import { PageHeader, Card } from "@/components/ui";
+import { ExportRangeForm } from "@/components/ExportRangeForm";
 import { Download } from "lucide-react";
 
 // Export types (PRD §7.12). Each is a CSV download from the export route.
@@ -17,6 +18,9 @@ export default function ExportsPage() {
         title="Exports"
         subtitle="Download clean invoice data for Excel or your bookkeeping system"
       />
+      <ExportRangeForm />
+
+      <h2 className="mt-8 mb-3 text-sm font-semibold">Quick exports</h2>
       <Card className="divide-y divide-border">
         {EXPORTS.map((e) => (
           <a
@@ -30,8 +34,7 @@ export default function ExportsPage() {
         ))}
       </Card>
       <p className="mt-4 text-xs text-muted">
-        CSV opens directly in Excel. Filtered exports (by supplier, date range)
-        are available from the{" "}
+        CSV opens directly in Excel. Per-supplier exports are available from the{" "}
         <a href="/invoices" className="text-primary hover:underline">
           invoice register
         </a>

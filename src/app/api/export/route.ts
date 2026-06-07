@@ -1,28 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getInvoices } from "@/lib/data";
-import { toCsv, invoicesToRows } from "@/lib/export/csv";
+import { toCsv, invoicesToRows, vatSummaryRows } from "@/lib/export/csv";
 import type { InvoiceStatus } from "@/lib/constants";
 
 export const runtime = "nodejs";
 
 /**
  * CSV export for bookkeeping (PRD §7.12). Honours the same filters as the
- * register so "export this filtered list" works.
- *   /api/export?type=invoices&status=approved&from=2026-05-01&to=2026-05-31
+ * register. `type=vat_summary` rolls up to one row per month (+ TOTAL) for
+ * filing; otherwise exports invoices line by line.
+ *   /api/export?type=vat_summary&status=approved&from=2026-03-01&to=2026-04-30
  */
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const status = sp.get("status") as InvoiceStatus | null;
+  const type = sp.get("type");
+  const from = sp.get("from") ?? undefined;
+  const to = sp.get("to") ?? undefined;
   const invoices = await getInvoices({
     status: status ?? undefined,
-    from: sp.get("from") ?? undefined,
-    to: sp.get("to") ?? undefined,
+    from,
+    to,
     search: sp.get("q") ?? undefined,
     limit: 5000,
   });
 
-  const csv = toCsv(invoicesToRows(invoices));
-  const name = `invoices-${status ?? "all"}.csv`;
+  const isVat = type === "vat_summary";
+  const csv = toCsv(isVat ? vatSummaryRows(invoices) : invoicesToRows(invoices));
+  const range = from || to ? `-${from ?? "start"}_${to ?? "today"}` : "";
+  const name = isVat
+    ? `vat-summary${range}.csv`
+    : `invoices-${status ?? "all"}${range}.csv`;
   return new NextResponse(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
