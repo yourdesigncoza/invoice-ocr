@@ -46,48 +46,67 @@ How it's enforced (do NOT regress to service-role-everywhere):
   `user_id uuid → auth.users` column; RLS is `user_id = auth.uid()` (migration
   `0006_multitenant.sql`); Storage objects live under `${userId}/…` with
   path-prefix Storage policies.
+- **Admin (done):** `/admin` gated by `isAdminEmail` — lists auth users with
+  reset-password / delete (account management only, never invoice data). Routes
+  under `src/app/api/admin/users/*` (404 to non-admins).
 - **Client rules:** reads + interactive route handlers use the cookie-bound
   **`createServerSupabase()`** (RLS auto-scopes to the caller — this is the IDOR
   protection; don't add manual `owner_id` filters on top). The **only** legit
   `createAdminSupabase()` uses are: the extraction pipeline's background `after()`
-  work (no session post-response — it stamps `user_id` explicitly) and admin
+  work (no session post-response — it stamps `user_id` explicitly), and admin
   account management (`svc.auth.admin.*`). Background/admin queries that touch
   tenant data MUST filter by `user_id` (e.g. `findDuplicates`).
-- **Still open:** admin dashboard (Phase 3), sites/Settings (Phase 4). Open
-  signup spends the OpenAI budget — add rate-limit/BotID before public launch;
-  enable Supabase "leaked password protection".
+- **Before public deploy:** open signup spends the OpenAI budget — add a per-user
+  upload rate-limit / Vercel BotID; enable Supabase "leaked password protection";
+  set `ADMIN_EMAILS` + the Supabase/OpenAI env vars on Vercel.
 
 ## Commands
 
 ```bash
-npm run dev          # local dev server
-npm run build        # production build (run before pushing/deploying)
+npm run dev          # local dev server (restart after editing proxy.ts or env vars)
+npm run build        # production build (run before pushing — also regenerates
+                     #   .next/types, needed when adding a new route handler)
 npm run lint         # eslint
-npx supabase ...     # Supabase CLI (not installed globally; use npx)
+npm test             # vitest (unit tests); single file: npx vitest run path/to.test.ts
 ```
 
-Env vars live in `.env.local` (see `.env.example`): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (server only), `OPENAI_API_KEY` (server only).
+Migrations: the Supabase MCP can apply DDL/DML directly (`apply_migration` /
+`execute_sql`, project ref `kitbiplhdoabmvnrlgxa`); keep the `.sql` file in
+`supabase/migrations/` in sync with what's applied.
+
+Env vars live in `.env.local` (see `.env.example`): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (server only), `OPENAI_API_KEY` (server only), `OPENAI_VISION_MODEL`, `ADMIN_EMAILS` (comma-separated super-admins).
 
 ## Architecture
 
 ```
 src/
-  app/                      # App Router pages (dashboard, upload, review, invoices, suppliers, reports)
-    api/                    # route handlers (extract, export, ...)
-  components/               # UI: sidebar, status badges, tables, review pane
+  proxy.ts                  # Next 16 "middleware" (renamed) — session refresh + auth gate
+  app/
+    (auth)/                 # login / signup / forgot / reset (public route group)
+    auth/callback/          # PKCE code exchange (email confirm + recovery)
+    (app)/                  # gated app: dashboard, upload, review, invoices, suppliers,
+                            #   duplicates, reports, settings (sites + account), admin
+    api/                    # route handlers: extract, invoices/[id], uploads/status,
+                            #   export, projects, admin/users/*
+  components/               # UI: sidebar, status/duplicate badges, tables, review pane,
+                            #   AuthForm, modals, SitesManager, AdminUsersClient
   lib/
-    supabase/               # server.ts (service role), client.ts (browser), middleware session
+    auth-guards.ts          # getUser / requireUser / isAdminEmail / requireAdmin
+    supabase/               # server.ts (createServerSupabase = cookie/RLS + createAdminSupabase
+                            #   = service role), client.ts (browser)
+    data.ts                 # all server reads (RLS-scoped via createServerSupabase)
     extraction/             # the engine — provider-abstracted
       schema.ts             # Zod invoice schema = the extraction contract
       provider.ts           # ExtractionProvider interface
       openai-vision.ts      # primary provider
       validate.ts           # business-rule validation (PRD §7.3.2)
       confidence.ts         # field + document confidence scoring
-    suppliers/matching.ts   # multi-signal supplier matching
-    duplicates/detect.ts    # duplicate scoring
-    export/                 # Excel/CSV builders
-supabase/migrations/        # SQL schema (PRD §11 data model)
-tests/sample_invoices/      # gold-standard fixtures (from the WhatsApp samples)
+    suppliers/matching.ts   # multi-signal supplier matching (pass an RLS-scoped client)
+    duplicates/detect.ts    # duplicate scoring (user-scoped probe)
+    export/                 # CSV builders
+supabase/migrations/        # SQL schema (0001 init … 0006 multitenant)
+eval/                       # accuracy harness vs hand-labelled gold set (labels.json gitignored)
+tests/                      # vitest unit tests + sample_invoices/ fixtures
 ```
 
 The extraction engine is **provider-abstracted from day one** — one entry point regardless of backend, mirroring the PRD's `processor.process_invoice(file, schema, provider)`. Pipeline (each stage discrete so a regression is isolatable):
@@ -111,13 +130,16 @@ Correctness requirements, not style:
 ## Domain logic that's easy to get wrong
 
 - **Supplier matching** is multi-signal, not just fuzzy string: exact → normalized → fuzzy → VAT number → phone → address → historical user-approved matches. Same supplier recurs under inconsistent names ("SPAR", "Hartenbos Spar & Tops", "Retail Spar Hartenbos") and across branches. Store `original_supplier_name` on the invoice; link to a normalized supplier silo (`parent_supplier_id` for branches).
-- **Duplicate detection:** primary `Supplier + Invoice Number + Date + Total`; fallback when invoice number missing (common on till slips) `Supplier + Date + Total + image similarity`. Run before approval.
-- **VAT** is often missing/unclear on thermal slips/informal receipts — absence is a flag, not an error. Don't assume a tax invoice has clean VAT.
-- **Document types**: Tax Invoice / Receipt / Cash Sale / Purchase Notice / Prepaid Electricity / Statement / Unknown / Not Invoice — drives VAT and reporting behavior.
+- **Duplicate detection** is **system-driven, not a manual action** (no "mark duplicate" button/status). Computed at upload (`findDuplicates`, user-scoped): match on linked `supplier_id` *or* normalized `original_supplier_name` (so it fires before a silo is linked) + `Total`, then `Invoice Number + Date` (primary) or `Date` (fallback). Matches are written to `duplicate_checks`; the UI **highlights** flagged invoices (badge + upload toast) and the reviewer **Accepts (approve) or Deletes**. `reject` and a (removed) "not an invoice" are the same disposition — only `reject` remains.
+- **VAT** is often missing/unclear on thermal slips/informal receipts — absence is a flag, not an error. Don't assume a tax invoice has clean VAT. (SA VAT is a flat 15%; a configurable default-rate feature is a planned follow-up — see project memory.)
+- **Document types**: Tax Invoice / Receipt / Cash Sale / Purchase Notice / Prepaid Electricity / Statement / Unknown / Not Invoice — drives VAT and reporting behavior. ("Not Invoice" is a *document type*, distinct from the removed `not_invoice` status.)
+- **Sites (projects)** are an **adaptive** dimension: the picker/column/filter only appear once a user has **≥2 active sites** (0–1 → the app looks exactly as before). Assign a batch at upload, correct in review/modal; "remove" = **archive** (invoices keep their history).
 
 ## Data model
 
-PRD §11. Core tables: `suppliers` (+`parent_supplier_id`), `invoices`, `invoice_items`, `document_uploads`, `extraction_logs` (raw + extracted + validated JSON + provider/model + warnings), `extraction_fields` (per-field raw/normalized/confidence/correction audit), `duplicate_checks`, `audit_logs`. Approved financial records are never silently deleted; manual corrections are audit-logged.
+PRD §11. Core tables: `suppliers` (+`parent_supplier_id`), `invoices`, `invoice_items`, `document_uploads`, `extraction_logs` (raw + extracted + validated JSON + provider/model + warnings), `extraction_fields` (per-field raw/normalized/confidence/correction audit), `duplicate_checks`, `audit_logs`, and `projects` (= "sites", a cost-centre dimension on `invoices.project_id`). Approved financial records are never silently deleted; manual corrections are audit-logged.
+
+**Multi-tenant:** every owned table carries `user_id uuid → auth.users` with RLS `user_id = auth.uid()` (migration `0006`); set `user_id` on **every** insert. The `invoice_status` enum still contains the retired `duplicate` and `not_invoice` values (Postgres can't drop enum values in place) — they're **inert**: don't reintroduce them. Live statuses are `processing / needs_review / approved / rejected / low_confidence`.
 
 ## Testing & extraction quality
 
