@@ -16,6 +16,7 @@ import {
   Menu,
   X,
   LogOut,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 import Image from "next/image";
@@ -32,6 +33,7 @@ const ICONS: Record<string, LucideIcon> = {
   CopyCheck,
   FileBarChart,
   Download,
+  ShieldCheck,
 };
 
 const Wordmark = () => (
@@ -49,11 +51,20 @@ const Wordmark = () => (
 );
 
 /** Shared nav list — single source of truth for both desktop rail and mobile drawer. */
-function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+function NavLinks({
+  onNavigate,
+  isAdmin,
+}: {
+  onNavigate?: () => void;
+  isAdmin?: boolean;
+}) {
   const pathname = usePathname();
+  const items = isAdmin
+    ? [...NAV, { href: "/admin", label: "Admin", icon: "ShieldCheck" } as const]
+    : NAV;
   return (
     <>
-      {NAV.map((item) => {
+      {items.map((item) => {
         const Icon = ICONS[item.icon] ?? Receipt;
         const active =
           pathname === item.href || pathname.startsWith(item.href + "/");
@@ -104,7 +115,7 @@ function AccountFooter({
   );
 }
 
-export function Sidebar({ email }: { email: string }) {
+export function Sidebar({ email, isAdmin }: { email: string; isAdmin?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -128,7 +139,7 @@ export function Sidebar({ email }: { email: string }) {
           <Wordmark />
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
-          <NavLinks />
+          <NavLinks isAdmin={isAdmin} />
         </nav>
         <AccountFooter email={email} onSignOut={signOut} />
       </aside>
@@ -169,7 +180,7 @@ export function Sidebar({ email }: { email: string }) {
               </button>
             </div>
             <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-              <NavLinks onNavigate={() => setOpen(false)} />
+              <NavLinks onNavigate={() => setOpen(false)} isAdmin={isAdmin} />
             </nav>
             <AccountFooter email={email} onSignOut={signOut} />
           </aside>
