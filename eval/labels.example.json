@@ -1,0 +1,27 @@
+{
+  "_about": "Format example for the gold-standard set. Copy to labels.json and fill with your real receipts' correct values. See README.md.",
+  "fields_scored": [
+    "supplier",
+    "invoice_date",
+    "document_type",
+    "total_incl_vat",
+    "vat_amount",
+    "invoice_number",
+    "vat_number"
+  ],
+  "labels": [
+    {
+      "image": "receipt-001.jpeg",
+      "verified": false,
+      "supplier": "Example Wholesale (Pty) Ltd",
+      "invoice_date": "2026-05-26",
+      "document_type": "Tax Invoice",
+      "subtotal_excl_vat": 100.0,
+      "vat_amount": 15.0,
+      "total_incl_vat": 115.0,
+      "invoice_number": "INV12345",
+      "vat_number": "4000000000",
+      "notes": "Set verified:true once a human confirms this row. Use null for fields that are genuinely absent/illegible."
+    }
+  ]
+}

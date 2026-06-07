@@ -41,9 +41,12 @@ yarn-error.log*
 /.playwright-mcp/
 /*.png
 
-# model-eval output — contains extracted data from real client receipts
+# model-eval output + gold labels — contain data from real client receipts
 /eval/results.json
 /eval/results/
+/eval/labels.json
+__pycache__/
+*.pyc
 
 # exported CSVs (real invoice data) + editor lock files
 /*.csv
