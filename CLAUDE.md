@@ -29,6 +29,24 @@ Not an OCR tool — an invoice **intelligence** layer. Extraction is the front d
 
 The MVP is strictly **human-assisted**: extract → confidence-score → human reviews side-by-side with the original image → only **approved** records are trusted. Dashboards default to approved invoices only. Never auto-approve on raw extraction output.
 
+## Security & auth status — ⚠️ DEPLOY BLOCKER
+
+**The app currently has NO authentication.** Every route handler and server
+data path uses the service-role Supabase client (`createAdminSupabase`), which
+bypasses RLS. Anyone who can reach a URL can read any invoice, fetch signed file
+URLs, and mutate/approve records (IDOR). This is a deliberately deferred MVP gap
+(PRD §13.4 "login required", §5 RBAC = Phase 2) — **acceptable only for
+local/private use. Add the auth gate before any public Vercel deploy.**
+
+The data model is **single-tenant** (admin/reviewer/management all see all
+invoices, PRD §5), so the missing control is *authentication*, not per-row
+ownership — don't add `owner_id` scoping. The fix:
+1. Supabase Auth (email/password or magic link) + login page.
+2. `middleware.ts` that redirects unauthenticated users and refreshes the session.
+3. Switch server reads to the cookie-bound `createServerSupabase()` (honors the
+   existing `authenticated using (true)` RLS) and gate route handlers on a valid
+   session; keep `createAdminSupabase()` only for the extraction pipeline writes.
+
 ## Commands
 
 ```bash
