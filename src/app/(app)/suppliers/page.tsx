@@ -44,7 +44,19 @@ export default async function SuppliersPage() {
                       {s.supplier_name}
                     </Link>
                   </td>
-                  <td className="px-4 py-2.5 text-muted">{s.vat_number || "—"}</td>
+                  <td className="px-4 py-2.5 text-muted">
+                    {s.vat_numbers.length === 0 ? (
+                      "—"
+                    ) : (
+                      <div className="space-y-0.5">
+                        {s.vat_numbers.map((v) => (
+                          <div key={v} className="tabular-nums">
+                            {v}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-2.5 text-right tabular-nums">{s.invoice_count}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums font-medium">
                     {formatMoney(s.total_spend)}

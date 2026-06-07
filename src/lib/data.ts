@@ -8,6 +8,7 @@ import type {
   DuplicateCheck,
 } from "./types";
 import type { InvoiceStatus } from "./constants";
+import { formatVat } from "./utils";
 
 export { isSupabaseConfigured };
 
@@ -80,29 +81,53 @@ export async function getInvoice(
 }
 
 export async function getSuppliers(): Promise<
-  (Supplier & { invoice_count: number; total_spend: number })[]
+  (Supplier & {
+    invoice_count: number;
+    total_spend: number;
+    vat_numbers: string[];
+  })[]
 > {
   const supabase = db();
   if (!supabase) return [];
   const { data: suppliers } = await supabase.from("suppliers").select("*");
   if (!suppliers) return [];
-  // aggregate approved spend per supplier
+  // aggregate approved spend + collect VAT numbers detected on invoices
   const { data: invoices } = await supabase
     .from("invoices")
-    .select("supplier_id, total_incl_vat, status");
-  const agg = new Map<string, { count: number; spend: number }>();
+    .select("supplier_id, total_incl_vat, status, vat_number");
+  const agg = new Map<
+    string,
+    { count: number; spend: number; vats: Map<string, string> }
+  >();
   for (const inv of invoices ?? []) {
-    if (!inv.supplier_id || inv.status !== "approved") continue;
-    const a = agg.get(inv.supplier_id) ?? { count: 0, spend: 0 };
-    a.count += 1;
-    a.spend += Number(inv.total_incl_vat ?? 0);
+    if (!inv.supplier_id) continue;
+    const a =
+      agg.get(inv.supplier_id) ?? { count: 0, spend: 0, vats: new Map() };
+    if (inv.status === "approved") {
+      a.count += 1;
+      a.spend += Number(inv.total_incl_vat ?? 0);
+    }
+    // dedupe distinct VAT numbers by digits; store whitespace-stripped value
+    if (inv.vat_number) {
+      const key = String(inv.vat_number).replace(/\D/g, "");
+      if (key && !a.vats.has(key)) a.vats.set(key, formatVat(inv.vat_number)!);
+    }
     agg.set(inv.supplier_id, a);
   }
-  return (suppliers as Supplier[]).map((s) => ({
-    ...s,
-    invoice_count: agg.get(s.id)?.count ?? 0,
-    total_spend: agg.get(s.id)?.spend ?? 0,
-  }));
+  return (suppliers as Supplier[]).map((s) => {
+    const a = agg.get(s.id);
+    const vats = a ? [...a.vats.values()] : [];
+    // include the supplier's own stored VAT number if not already present
+    if (s.vat_number && !vats.some((v) => v.replace(/\D/g, "") === s.vat_number!.replace(/\D/g, ""))) {
+      vats.unshift(formatVat(s.vat_number)!);
+    }
+    return {
+      ...s,
+      invoice_count: a?.count ?? 0,
+      total_spend: a?.spend ?? 0,
+      vat_numbers: vats,
+    };
+  });
 }
 
 export async function getSupplier(id: string): Promise<Supplier | null> {

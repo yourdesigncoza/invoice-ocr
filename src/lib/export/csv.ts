@@ -1,4 +1,5 @@
 import type { InvoiceWithSupplier } from "@/lib/types";
+import { formatVat } from "@/lib/utils";
 
 /** RFC-4180-ish CSV cell escaping. */
 function cell(v: unknown): string {
@@ -30,7 +31,7 @@ export function invoicesToRows(invoices: InvoiceWithSupplier[]) {
     total_incl_vat: i.total_incl_vat ?? "",
     currency: i.currency_code,
     payment_method: i.payment_method ?? "",
-    vat_number: i.vat_number ?? "",
+    vat_number: formatVat(i.vat_number) ?? "",
     confidence: i.confidence_score ?? "",
   }));
 }

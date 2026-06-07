@@ -37,6 +37,13 @@ export function formatPct(value: number | null | undefined): string {
   return `${Math.round(value * 100)}%`;
 }
 
+/** Normalise a VAT number for consistent display: strip all whitespace. */
+export function formatVat(v: string | null | undefined): string | null {
+  if (!v) return null;
+  const s = String(v).replace(/\s+/g, "");
+  return s || null;
+}
+
 /** Confidence band → colour, per PRD §12 thresholds. */
 export function confidenceColor(score: number | null | undefined): string {
   if (score === null || score === undefined) return "var(--muted)";

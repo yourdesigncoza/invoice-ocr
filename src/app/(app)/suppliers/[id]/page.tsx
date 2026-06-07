@@ -3,7 +3,7 @@ import { getSupplier, getInvoices, isSupabaseConfigured } from "@/lib/data";
 import { bucketKey } from "@/lib/periods";
 import { PageHeader, NotConfigured, StatCard, Card } from "@/components/ui";
 import { InvoiceTable } from "@/components/InvoiceTable";
-import { formatMoney, formatDate } from "@/lib/utils";
+import { formatMoney, formatDate, formatVat } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +33,18 @@ export default async function SupplierProfilePage(
     .sort()
     .at(-1);
 
+  // distinct VAT numbers detected across this supplier's invoices (+ stored)
+  const vatNumbers = (() => {
+    const seen = new Map<string, string>();
+    for (const v of [supplier.vat_number, ...invoices.map((i) => i.vat_number)]) {
+      const clean = formatVat(v);
+      if (!clean) continue;
+      const key = clean.replace(/\D/g, "");
+      if (key && !seen.has(key)) seen.set(key, clean);
+    }
+    return [...seen.values()];
+  })();
+
   // monthly spend silo (PRD §7.9)
   const byMonth = new Map<string, { count: number; spend: number; vat: number }>();
   for (const i of approved) {
@@ -49,7 +61,10 @@ export default async function SupplierProfilePage(
     <>
       <PageHeader
         title={supplier.supplier_name}
-        subtitle={[supplier.vat_number && `VAT ${supplier.vat_number}`, supplier.address]
+        subtitle={[
+          vatNumbers.length ? `VAT ${vatNumbers.join(", ")}` : null,
+          supplier.address,
+        ]
           .filter(Boolean)
           .join(" · ")}
       />
