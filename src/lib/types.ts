@@ -20,9 +20,19 @@ export interface Supplier {
   updated_at: string;
 }
 
+export interface Project {
+  id: string;
+  name: string;
+  color: string | null;
+  archived: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Invoice {
   id: string;
   supplier_id: string | null;
+  project_id: string | null;
   original_supplier_name: string | null;
   invoice_number: string | null;
   invoice_date: string | null; // ISO YYYY-MM-DD
@@ -106,6 +116,7 @@ export interface DuplicateCheck {
 // Joined shape used by the register & review screens
 export type InvoiceWithSupplier = Invoice & {
   supplier: Supplier | null;
+  project?: Project | null;
   // count of open duplicate_checks flagging this invoice (system-detected)
   duplicate_count?: number;
 };

@@ -1,8 +1,14 @@
 import Link from "next/link";
-import { getInvoices, isSupabaseConfigured, type InvoiceFilters } from "@/lib/data";
+import {
+  getInvoices,
+  getActiveProjects,
+  isSupabaseConfigured,
+  type InvoiceFilters,
+} from "@/lib/data";
 import { rangeFor } from "@/lib/periods";
 import { PageHeader, NotConfigured, Button } from "@/components/ui";
 import { InvoiceTable } from "@/components/InvoiceTable";
+import { SiteFilter } from "@/components/SiteFilter";
 import { cn } from "@/lib/utils";
 import type { InvoiceStatus } from "@/lib/constants";
 
@@ -23,6 +29,7 @@ export default async function InvoicesPage(props: PageProps<"/invoices">) {
   const sp = await props.searchParams;
   const viewKey = typeof sp.view === "string" ? sp.view : "all";
   const q = typeof sp.q === "string" ? sp.q : undefined;
+  const projectId = typeof sp.project === "string" ? sp.project : undefined;
 
   if (!isSupabaseConfigured()) {
     return (
@@ -34,7 +41,14 @@ export default async function InvoicesPage(props: PageProps<"/invoices">) {
   }
 
   const view = VIEWS.find((v) => v.key === viewKey) ?? VIEWS[0];
-  const invoices = await getInvoices({ ...view.filters(), search: q, limit: 300 });
+  const activeProjects = await getActiveProjects();
+  const sitesEnabled = activeProjects.length >= 2;
+  const invoices = await getInvoices({
+    ...view.filters(),
+    search: q,
+    projectId: sitesEnabled ? projectId : undefined,
+    limit: 300,
+  });
 
   return (
     <>
@@ -52,7 +66,7 @@ export default async function InvoicesPage(props: PageProps<"/invoices">) {
         {VIEWS.map((v) => (
           <Link
             key={v.key}
-            href={`/invoices?view=${v.key}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
+            href={`/invoices?view=${v.key}${q ? `&q=${encodeURIComponent(q)}` : ""}${projectId ? `&project=${projectId}` : ""}`}
             className={cn(
               "rounded-lg px-3 py-1.5 text-sm whitespace-nowrap transition-colors",
               v.key === view.key
@@ -65,17 +79,28 @@ export default async function InvoicesPage(props: PageProps<"/invoices">) {
         ))}
       </div>
 
-      <form className="mb-4" action="/invoices">
-        <input type="hidden" name="view" value={view.key} />
-        <input
-          name="q"
-          defaultValue={q}
-          placeholder="Search supplier or invoice number…"
-          className="w-full max-w-md rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-        />
-      </form>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <form action="/invoices">
+          <input type="hidden" name="view" value={view.key} />
+          {projectId && <input type="hidden" name="project" value={projectId} />}
+          <input
+            name="q"
+            defaultValue={q}
+            placeholder="Search supplier or invoice number…"
+            className="w-full max-w-md rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+          />
+        </form>
+        {sitesEnabled && (
+          <SiteFilter
+            projects={activeProjects}
+            current={projectId ?? ""}
+            view={view.key}
+            q={q}
+          />
+        )}
+      </div>
 
-      <InvoiceTable invoices={invoices} />
+      <InvoiceTable invoices={invoices} showProject={sitesEnabled} />
     </>
   );
 }

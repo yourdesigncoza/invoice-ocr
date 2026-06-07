@@ -4,6 +4,7 @@ import type {
   Invoice,
   InvoiceWithSupplier,
   Supplier,
+  Project,
   InvoiceItem,
   DuplicateCheck,
 } from "./types";
@@ -22,6 +23,7 @@ async function db() {
 export interface InvoiceFilters {
   status?: InvoiceStatus | InvoiceStatus[];
   supplierId?: string;
+  projectId?: string;
   from?: string;
   to?: string;
   search?: string;
@@ -36,7 +38,7 @@ export async function getInvoices(
   let q = supabase
     .from("invoices")
     .select(
-      "*, supplier:suppliers(*), duplicate_checks!duplicate_checks_invoice_id_fkey(count)",
+      "*, supplier:suppliers(*), project:projects(*), duplicate_checks!duplicate_checks_invoice_id_fkey(count)",
     )
     .order("invoice_date", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
@@ -47,6 +49,7 @@ export async function getInvoices(
       ? q.in("status", filters.status)
       : q.eq("status", filters.status);
   if (filters.supplierId) q = q.eq("supplier_id", filters.supplierId);
+  if (filters.projectId) q = q.eq("project_id", filters.projectId);
   if (filters.from) q = q.gte("invoice_date", filters.from);
   if (filters.to) q = q.lte("invoice_date", filters.to);
   if (filters.search)
@@ -79,7 +82,7 @@ export async function getInvoice(
   const { data: invoice } = await supabase
     .from("invoices")
     .select(
-      "*, supplier:suppliers(*), duplicate_checks!duplicate_checks_invoice_id_fkey(count)",
+      "*, supplier:suppliers(*), project:projects(*), duplicate_checks!duplicate_checks_invoice_id_fkey(count)",
     )
     .eq("id", id)
     .single();
@@ -149,6 +152,62 @@ export async function getSupplier(id: string): Promise<Supplier | null> {
   if (!supabase) return null;
   const { data } = await supabase.from("suppliers").select("*").eq("id", id).single();
   return (data as Supplier) ?? null;
+}
+
+// ── Projects / sites (cost centres) ──────────────────────────────────────────
+
+/** Active projects + approved invoice_count & total_spend. Mirrors getSuppliers. */
+export async function getProjects(): Promise<
+  (Project & { invoice_count: number; total_spend: number })[]
+> {
+  const supabase = await db();
+  if (!supabase) return [];
+  const { data: projects } = await supabase
+    .from("projects")
+    .select("*")
+    .eq("archived", false)
+    .order("name");
+  if (!projects) return [];
+  const { data: invoices } = await supabase
+    .from("invoices")
+    .select("project_id, total_incl_vat, status");
+  const agg = new Map<string, { count: number; spend: number }>();
+  for (const inv of invoices ?? []) {
+    if (!inv.project_id || inv.status !== "approved") continue;
+    const a = agg.get(inv.project_id) ?? { count: 0, spend: 0 };
+    a.count += 1;
+    a.spend += Number(inv.total_incl_vat ?? 0);
+    agg.set(inv.project_id, a);
+  }
+  return (projects as Project[]).map((p) => ({
+    ...p,
+    invoice_count: agg.get(p.id)?.count ?? 0,
+    total_spend: agg.get(p.id)?.spend ?? 0,
+  }));
+}
+
+/** Lightweight active-project list for pickers. */
+export async function getActiveProjects(): Promise<Project[]> {
+  const supabase = await db();
+  if (!supabase) return [];
+  const { data } = await supabase
+    .from("projects")
+    .select("*")
+    .eq("archived", false)
+    .order("name");
+  return (data ?? []) as Project[];
+}
+
+/** The adaptive gate: project UI only surfaces once the user has ≥2 sites. */
+export async function projectsEnabled(): Promise<boolean> {
+  return (await getActiveProjects()).length >= 2;
+}
+
+export async function getProject(id: string): Promise<Project | null> {
+  const supabase = await db();
+  if (!supabase) return null;
+  const { data } = await supabase.from("projects").select("*").eq("id", id).single();
+  return (data as Project) ?? null;
 }
 
 export async function getOpenDuplicates(): Promise<

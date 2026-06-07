@@ -12,6 +12,7 @@ import {
   CopyCheck,
   FileBarChart,
   Download,
+  Settings,
   Receipt,
   Menu,
   X,
@@ -33,6 +34,7 @@ const ICONS: Record<string, LucideIcon> = {
   CopyCheck,
   FileBarChart,
   Download,
+  Settings,
   ShieldCheck,
 };
 

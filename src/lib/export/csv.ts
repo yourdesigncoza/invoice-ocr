@@ -27,6 +27,7 @@ export function invoicesToRows(invoices: InvoiceWithSupplier[]) {
     status: i.status,
     invoice_date: i.invoice_date ?? "",
     supplier: i.supplier?.supplier_name || i.original_supplier_name || "",
+    site: i.project?.name ?? "",
     invoice_number: i.invoice_number ?? "",
     document_type: i.document_type,
     subtotal_excl_vat: i.subtotal_excl_vat ?? "",

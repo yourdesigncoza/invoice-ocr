@@ -13,6 +13,7 @@ import { Card } from "@/components/ui";
 import { useUploadNotifications } from "@/components/UploadNotifications";
 import { compressImage } from "@/lib/image/compress";
 import { cn } from "@/lib/utils";
+import type { Project } from "@/lib/types";
 
 interface UploadResult {
   id: string | null;
@@ -21,11 +22,12 @@ interface UploadResult {
   error?: string;
 }
 
-export function UploadClient() {
+export function UploadClient({ projects = [] }: { projects?: Project[] }) {
   const router = useRouter();
   const notify = useUploadNotifications();
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [projectId, setProjectId] = useState("");
   const [errors, setErrors] = useState<{ fileName: string; error?: string }[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -42,6 +44,7 @@ export function UploadClient() {
         const prepared = await Promise.all(list.map(compressImage));
         const form = new FormData();
         prepared.forEach((f) => form.append("files", f));
+        if (projectId) form.append("projectId", projectId);
 
         // returns fast: files are stored + queued, extraction runs in the
         // background. We register the jobs for toast tracking and head to the
@@ -70,7 +73,7 @@ export function UploadClient() {
         setBusy(false);
       }
     },
-    [router, notify],
+    [router, notify, projectId],
   );
 
   return (
@@ -92,6 +95,28 @@ export function UploadClient() {
         className="hidden"
         onChange={(e) => e.target.files && upload(e.target.files)}
       />
+
+      {/* site assignment — only when the user runs multiple sites */}
+      {projects.length > 0 && (
+        <div>
+          <label className="mb-1 block text-xs font-medium text-muted">
+            Assign this batch to a site
+          </label>
+          <select
+            value={projectId}
+            onChange={(e) => setProjectId(e.target.value)}
+            disabled={busy}
+            className="w-full max-w-xs rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary disabled:opacity-50"
+          >
+            <option value="">No site</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* primary actions — camera first, since most uploads are phone photos */}
       <div className="grid grid-cols-2 gap-3">

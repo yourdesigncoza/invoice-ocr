@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getInvoice, isSupabaseConfigured } from "@/lib/data";
+import { getInvoice, getActiveProjects, isSupabaseConfigured } from "@/lib/data";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { findSupplierMatches } from "@/lib/suppliers/matching";
 import { STORAGE_BUCKET } from "@/lib/constants";
@@ -58,6 +58,10 @@ export default async function ReviewDetailPage(
     .eq("invoice_id", id)
     .eq("status", "open");
 
+  // site picker (adaptive — only when the user has ≥2 sites)
+  const activeProjects = await getActiveProjects();
+  const projects = activeProjects.length >= 2 ? activeProjects : [];
+
   return (
     <ReviewClient
       invoice={invoice}
@@ -75,6 +79,7 @@ export default async function ReviewDetailPage(
         score: Number(d.match_score),
         invoice: d.possible_duplicate as Invoice,
       }))}
+      projects={projects}
     />
   );
 }

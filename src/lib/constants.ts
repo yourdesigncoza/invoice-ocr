@@ -73,6 +73,7 @@ export const NAV = [
   { href: "/duplicates", label: "Duplicates", icon: "CopyCheck" },
   { href: "/reports", label: "Reports", icon: "FileBarChart" },
   { href: "/exports", label: "Exports", icon: "Download" },
+  { href: "/settings", label: "Settings", icon: "Settings" },
 ] as const;
 
 export const STORAGE_BUCKET = "invoices";

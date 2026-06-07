@@ -6,7 +6,13 @@ import { formatMoney, formatDate } from "@/lib/utils";
 import type { InvoiceWithSupplier } from "@/lib/types";
 
 /** Airtable-style invoice register table (PRD §7.6). */
-export function InvoiceTable({ invoices }: { invoices: InvoiceWithSupplier[] }) {
+export function InvoiceTable({
+  invoices,
+  showProject = false,
+}: {
+  invoices: InvoiceWithSupplier[];
+  showProject?: boolean;
+}) {
   if (invoices.length === 0) {
     return (
       <div className="rounded-xl border border-border bg-surface p-12 text-center text-sm text-muted">
@@ -23,6 +29,7 @@ export function InvoiceTable({ invoices }: { invoices: InvoiceWithSupplier[] }) 
               <Th>Status</Th>
               <Th>Date</Th>
               <Th>Supplier</Th>
+              {showProject && <Th>Site</Th>}
               <Th>Invoice No</Th>
               <Th>Type</Th>
               <Th className="text-right">Total</Th>
@@ -47,6 +54,9 @@ export function InvoiceTable({ invoices }: { invoices: InvoiceWithSupplier[] }) 
                 <Td className="font-medium">
                   {inv.supplier?.supplier_name || inv.original_supplier_name || "Unknown"}
                 </Td>
+                {showProject && (
+                  <Td className="text-muted">{inv.project?.name || "—"}</Td>
+                )}
                 <Td className="text-muted">{inv.invoice_number || "—"}</Td>
                 <Td className="text-muted whitespace-nowrap">{inv.document_type}</Td>
                 <Td className="text-right tabular-nums font-medium">

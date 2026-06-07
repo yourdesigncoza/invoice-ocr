@@ -22,7 +22,7 @@ import {
   PAYMENT_METHODS,
   type InvoiceStatus,
 } from "@/lib/constants";
-import type { Invoice, InvoiceItem, Supplier } from "@/lib/types";
+import type { Invoice, InvoiceItem, Supplier, Project } from "@/lib/types";
 
 type Action = "approve" | "reject" | "save";
 
@@ -34,6 +34,7 @@ interface Props {
   supplierMatches: { supplier: Supplier; score: number; reason: string }[];
   allSuppliers: Supplier[];
   duplicates: { reason: string; score: number; invoice: Invoice }[];
+  projects: Project[];
 }
 
 // editable text/number/date/select fields shown on the right pane (PRD §7.4)
@@ -59,6 +60,7 @@ export function ReviewClient({
   supplierMatches,
   allSuppliers,
   duplicates,
+  projects,
 }: Props) {
   const router = useRouter();
   const [values, setValues] = useState<Record<string, string>>(() => {
@@ -71,11 +73,15 @@ export function ReviewClient({
   });
   const [corrected, setCorrected] = useState<Set<string>>(new Set());
   const [supplierId, setSupplierId] = useState<string | null>(invoice.supplier_id);
+  const [projectId, setProjectId] = useState<string>(invoice.project_id ?? "");
   const [busy, setBusy] = useState<Action | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const dirty = corrected.size > 0 || supplierId !== invoice.supplier_id;
+  const dirty =
+    corrected.size > 0 ||
+    supplierId !== invoice.supplier_id ||
+    projectId !== (invoice.project_id ?? "");
 
   function setField(key: string, value: string) {
     setValues((p) => ({ ...p, [key]: value }));
@@ -104,6 +110,7 @@ export function ReviewClient({
           fields: payload,
           correctedFields: [...corrected],
           linkSupplierId: supplierId ?? undefined,
+          linkProjectId: projectId,
           ...extra,
         }),
       });
@@ -304,6 +311,25 @@ export function ReviewClient({
               </div>
             )}
           </div>
+
+          {/* site / project assignment (only when the user runs ≥2 sites) */}
+          {projects.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold mb-2">Site</h3>
+              <select
+                value={projectId}
+                onChange={(e) => setProjectId(e.target.value)}
+                className="w-full rounded-lg border border-border bg-surface px-2.5 py-2 text-sm"
+              >
+                <option value="">No site</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* editable fields */}
           <div>

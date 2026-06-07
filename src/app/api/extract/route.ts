@@ -24,6 +24,7 @@ interface Job {
   buffer: Buffer;
   mimeType: string;
   userId: string;
+  projectId: string | null;
 }
 
 /**
@@ -55,12 +56,14 @@ export async function POST(req: NextRequest) {
   const files = form.getAll("files").filter((f): f is File => f instanceof File);
   if (files.length === 0)
     return NextResponse.json({ error: "No files provided" }, { status: 400 });
+  // optional site assignment for the whole batch (a batch is usually one site)
+  const projectId = (form.get("projectId") as string | null) || null;
 
   // Phase 1 — store originals + create processing rows (fast)
   const jobs: Job[] = [];
   const uploads: { id: string | null; fileName: string; ok: boolean; error?: string }[] = [];
   for (const file of files) {
-    const stored = await storeOriginal(supabase, file, user.id);
+    const stored = await storeOriginal(supabase, file, user.id, projectId);
     if ("error" in stored) {
       uploads.push({ id: null, fileName: stored.fileName, ok: false, error: stored.error });
     } else {
@@ -85,6 +88,7 @@ async function storeOriginal(
   supabase: Supabase,
   file: File,
   userId: string,
+  projectId: string | null,
 ): Promise<Job | { fileName: string; error: string }> {
   const fileName = file.name || "upload";
   if (!ACCEPTED.includes(file.type)) {
@@ -126,11 +130,12 @@ async function storeOriginal(
     buffer,
     mimeType: file.type,
     userId,
+    projectId,
   };
 }
 
 async function processStored(supabase: Supabase, job: Job) {
-  const { docId, fileName, objectPath, dir, buffer, mimeType, userId } = job;
+  const { docId, fileName, objectPath, dir, buffer, mimeType, userId, projectId } = job;
   try {
     // preprocess (downscale large images / auto-orient) — only store a processed
     // companion when an actual resize happened (PRD §4.5)
@@ -158,6 +163,7 @@ async function processStored(supabase: Supabase, job: Job) {
         original_file_path: objectPath,
         processed_file_path: processedPath,
         user_id: userId,
+        project_id: projectId,
       })
       .select("id, supplier_id, original_supplier_name, invoice_number, invoice_date, total_incl_vat")
       .single();

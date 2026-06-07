@@ -56,6 +56,8 @@ interface PatchBody {
   // supplier resolution
   linkSupplierId?: string;
   createSupplier?: { name: string; vat_number?: string; address?: string };
+  // site/project assignment ("" / null clears it)
+  linkProjectId?: string | null;
   // workflow action
   action?: "approve" | "reject" | "save";
   correctedFields?: string[]; // names the reviewer manually changed
@@ -108,6 +110,11 @@ export async function PATCH(
     update.supplier_id = sup.id;
   } else if (body.linkSupplierId) {
     update.supplier_id = body.linkSupplierId;
+  }
+
+  // site/project assignment
+  if (body.linkProjectId !== undefined) {
+    update.project_id = body.linkProjectId || null;
   }
 
   // workflow action → status
