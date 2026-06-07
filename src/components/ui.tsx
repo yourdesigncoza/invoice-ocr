@@ -54,17 +54,18 @@ export function StatCard({
   accent?: string;
 }) {
   return (
-    <Card className="p-4">
-      <div className="text-xs font-medium text-muted uppercase tracking-wide">
+    <Card className="px-3 py-2">
+      <div className="text-[10px] font-medium text-muted uppercase tracking-wide truncate">
         {label}
       </div>
       <div
-        className="mt-1.5 text-2xl font-semibold tabular-nums"
+        className="mt-0.5 text-base font-semibold tabular-nums truncate leading-tight"
+        title={typeof value === "string" ? value : undefined}
         style={accent ? { color: accent } : undefined}
       >
         {value}
       </div>
-      {hint && <div className="mt-0.5 text-xs text-muted">{hint}</div>}
+      {hint && <div className="text-[10px] text-muted truncate">{hint}</div>}
     </Card>
   );
 }

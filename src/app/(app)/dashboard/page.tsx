@@ -34,7 +34,7 @@ export default async function DashboardPage() {
         }
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard label="Total Spend" value={formatMoney(data?.totalSpend ?? 0)} hint="Approved, all time" />
         <StatCard label="Total VAT" value={formatMoney(data?.totalVat ?? 0)} />
         <StatCard label="Invoices" value={data?.invoiceCount ?? 0} hint="Approved" />
