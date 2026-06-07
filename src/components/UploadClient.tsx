@@ -2,9 +2,17 @@
 
 import { useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { UploadCloud, FileCheck2, FileX2, Loader2 } from "lucide-react";
+import {
+  UploadCloud,
+  FileCheck2,
+  FileX2,
+  Loader2,
+  Camera,
+  FolderOpen,
+} from "lucide-react";
 import { Card, Button } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
+import { compressImage } from "@/lib/image/compress";
 import { cn, formatPct } from "@/lib/utils";
 import type { InvoiceStatus } from "@/lib/constants";
 
@@ -25,6 +33,7 @@ export function UploadClient() {
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<FileResult[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
 
   const upload = useCallback(async (files: FileList | File[]) => {
     const list = Array.from(files);
@@ -32,8 +41,11 @@ export function UploadClient() {
     setBusy(true);
     setResults([]);
     try {
+      // shrink phone photos on-device before upload (Vercel 4.5 MB body limit
+      // + faster on mobile data); PDFs/small images pass through unchanged
+      const prepared = await Promise.all(list.map(compressImage));
       const form = new FormData();
-      list.forEach((f) => form.append("files", f));
+      prepared.forEach((f) => form.append("files", f));
       const res = await fetch("/api/extract", { method: "POST", body: form });
       const json = await res.json();
       if (!res.ok) {
@@ -53,13 +65,52 @@ export function UploadClient() {
 
   return (
     <div className="space-y-6">
+      {/* hidden inputs: camera opens the rear camera on phones */}
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => e.target.files && upload(e.target.files)}
+      />
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        accept="image/jpeg,image/png,image/webp,application/pdf"
+        className="hidden"
+        onChange={(e) => e.target.files && upload(e.target.files)}
+      />
+
+      {/* primary actions — camera first, since most uploads are phone photos */}
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          onClick={() => cameraRef.current?.click()}
+          disabled={busy}
+          className="flex flex-col items-center justify-center gap-2 rounded-xl bg-primary px-4 py-6 text-white hover:bg-blue-700 disabled:opacity-50 disabled:pointer-events-none"
+        >
+          <Camera className="h-7 w-7" />
+          <span className="text-sm font-medium">Take photo</span>
+        </button>
+        <button
+          onClick={() => inputRef.current?.click()}
+          disabled={busy}
+          className="flex flex-col items-center justify-center gap-2 rounded-xl border border-border bg-surface px-4 py-6 text-foreground hover:bg-slate-50 disabled:opacity-50 disabled:pointer-events-none"
+        >
+          <FolderOpen className="h-7 w-7 text-muted" />
+          <span className="text-sm font-medium">Choose files</span>
+        </button>
+      </div>
+
+      {/* drag & drop — desktop convenience */}
       <Card
         className={cn(
-          "border-2 border-dashed transition-colors",
+          "hidden sm:block border-2 border-dashed transition-colors",
           dragging ? "border-primary bg-blue-50/50" : "border-border",
         )}
       >
-        <label
+        <div
           onDragOver={(e) => {
             e.preventDefault();
             setDragging(true);
@@ -70,16 +121,9 @@ export function UploadClient() {
             setDragging(false);
             upload(e.dataTransfer.files);
           }}
-          className="flex flex-col items-center justify-center gap-3 py-16 cursor-pointer text-center"
+          onClick={() => inputRef.current?.click()}
+          className="flex flex-col items-center justify-center gap-3 py-12 cursor-pointer text-center"
         >
-          <input
-            ref={inputRef}
-            type="file"
-            multiple
-            accept="image/jpeg,image/png,image/webp,application/pdf"
-            className="hidden"
-            onChange={(e) => e.target.files && upload(e.target.files)}
-          />
           {busy ? (
             <Loader2 className="h-8 w-8 text-primary animate-spin" />
           ) : (
@@ -90,15 +134,10 @@ export function UploadClient() {
               {busy ? "Extracting…" : "Drag & drop invoices here"}
             </p>
             <p className="text-xs text-muted mt-0.5">
-              JPG, PNG, WEBP, or PDF · single or batch
+              JPG, PNG, WEBP, or PDF · single or batch · photos shrink before upload
             </p>
           </div>
-          {!busy && (
-            <span className="text-xs text-primary font-medium">
-              or click to browse
-            </span>
-          )}
-        </label>
+        </div>
       </Card>
 
       {results.length > 0 && (
