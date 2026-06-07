@@ -7,7 +7,6 @@ import {
   Check,
   X,
   Copy,
-  Ban,
   Save,
   Loader2,
   AlertTriangle,
@@ -25,7 +24,7 @@ import {
 } from "@/lib/constants";
 import type { Invoice, InvoiceItem, Supplier } from "@/lib/types";
 
-type Action = "approve" | "reject" | "mark_duplicate" | "not_invoice" | "save";
+type Action = "approve" | "reject" | "save";
 
 interface Props {
   invoice: Invoice & { supplier?: Supplier | null };
@@ -372,12 +371,6 @@ export function ReviewClient({
 
           {/* secondary actions */}
           <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
-            <Button variant="ghost" onClick={() => run("mark_duplicate")} disabled={locked}>
-              <Copy className="h-4 w-4" /> Mark duplicate
-            </Button>
-            <Button variant="ghost" onClick={() => run("not_invoice")} disabled={locked}>
-              <Ban className="h-4 w-4" /> Not an invoice
-            </Button>
             <Button
               variant="ghost"
               onClick={() => run("reject")}

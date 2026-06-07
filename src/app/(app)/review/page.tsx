@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getInvoices, isSupabaseConfigured } from "@/lib/data";
 import { PageHeader, Card, NotConfigured, EmptyState, Button } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
+import { DuplicateBadge } from "@/components/DuplicateBadge";
 import { ConfidenceBadge } from "@/components/ConfidenceBadge";
 import { formatMoney, formatDate } from "@/lib/utils";
 import { ChevronRight } from "lucide-react";
@@ -42,11 +43,16 @@ export default async function ReviewQueuePage() {
             <Link
               key={inv.id}
               href={`/review/${inv.id}`}
-              className="flex items-start gap-3 p-4 hover:bg-slate-50"
+              className={
+                inv.duplicate_count
+                  ? "flex items-start gap-3 p-4 bg-orange-50/50 hover:bg-orange-50"
+                  : "flex items-start gap-3 p-4 hover:bg-slate-50"
+              }
             >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <StatusBadge status={inv.status} />
+                  <DuplicateBadge count={inv.duplicate_count} />
                   <span className="text-sm font-medium">
                     {inv.supplier?.supplier_name ||
                       inv.original_supplier_name ||

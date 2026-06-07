@@ -1,4 +1,5 @@
 import { StatusBadge } from "@/components/StatusBadge";
+import { DuplicateBadge } from "@/components/DuplicateBadge";
 import { ConfidenceBadge } from "@/components/ConfidenceBadge";
 import { InvoiceModal } from "@/components/InvoiceModal";
 import { formatMoney, formatDate } from "@/lib/utils";
@@ -32,8 +33,16 @@ export function InvoiceTable({ invoices }: { invoices: InvoiceWithSupplier[] }) 
           </thead>
           <tbody className="divide-y divide-border">
             {invoices.map((inv) => (
-              <tr key={inv.id} className="hover:bg-slate-50">
-                <Td><StatusBadge status={inv.status} /></Td>
+              <tr
+                key={inv.id}
+                className={inv.duplicate_count ? "bg-orange-50/50 hover:bg-orange-50" : "hover:bg-slate-50"}
+              >
+                <Td>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <StatusBadge status={inv.status} />
+                    <DuplicateBadge count={inv.duplicate_count} />
+                  </div>
+                </Td>
                 <Td className="text-muted whitespace-nowrap">{formatDate(inv.invoice_date)}</Td>
                 <Td className="font-medium">
                   {inv.supplier?.supplier_name || inv.original_supplier_name || "Unknown"}

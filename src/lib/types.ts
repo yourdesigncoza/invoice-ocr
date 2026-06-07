@@ -104,4 +104,8 @@ export interface DuplicateCheck {
 }
 
 // Joined shape used by the register & review screens
-export type InvoiceWithSupplier = Invoice & { supplier: Supplier | null };
+export type InvoiceWithSupplier = Invoice & {
+  supplier: Supplier | null;
+  // count of open duplicate_checks flagging this invoice (system-detected)
+  duplicate_count?: number;
+};

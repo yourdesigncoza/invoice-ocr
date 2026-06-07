@@ -6,9 +6,7 @@ export const INVOICE_STATUSES = [
   "needs_review",
   "approved",
   "rejected",
-  "duplicate",
   "low_confidence",
-  "not_invoice",
 ] as const;
 export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 
@@ -62,9 +60,7 @@ export const STATUS_META: Record<
   needs_review: { label: "Needs Review", color: "#f59e0b", bg: "#fffbeb" },
   approved: { label: "Approved", color: "#16a34a", bg: "#f0fdf4" },
   rejected: { label: "Rejected", color: "#6b7280", bg: "#f9fafb" },
-  duplicate: { label: "Duplicate", color: "#ea580c", bg: "#fff7ed" },
   low_confidence: { label: "Low Confidence", color: "#dc2626", bg: "#fef2f2" },
-  not_invoice: { label: "Not Invoice", color: "#6b7280", bg: "#f9fafb" },
 };
 
 // Left sidebar (PRD §9.2)

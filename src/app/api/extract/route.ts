@@ -147,7 +147,7 @@ async function processStored(supabase: Supabase, job: Job) {
         original_file_path: objectPath,
         processed_file_path: processedPath,
       })
-      .select("id, supplier_id, invoice_number, invoice_date, total_incl_vat")
+      .select("id, supplier_id, original_supplier_name, invoice_number, invoice_date, total_incl_vat")
       .single();
     if (invErr) throw new Error(invErr.message);
 
@@ -179,6 +179,7 @@ async function processStored(supabase: Supabase, job: Job) {
     const dupes = await findDuplicates(supabase, {
       id: invoice.id,
       supplier_id: invoice.supplier_id,
+      original_supplier_name: invoice.original_supplier_name,
       invoice_number: invoice.invoice_number,
       invoice_date: invoice.invoice_date,
       total_incl_vat: invoice.total_incl_vat,

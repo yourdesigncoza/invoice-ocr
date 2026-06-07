@@ -38,5 +38,26 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ uploads: [], error: error.message });
-  return NextResponse.json({ uploads: data ?? [] });
+
+  const rows = data ?? [];
+
+  // flag uploads whose resulting invoice has system-detected duplicate(s), so
+  // the upload notification can highlight them for review
+  const invoiceIds = rows
+    .map((r) => r.invoice_id)
+    .filter((id): id is string => Boolean(id));
+  let dupeIds = new Set<string>();
+  if (invoiceIds.length) {
+    const { data: checks } = await supabase
+      .from("duplicate_checks")
+      .select("invoice_id")
+      .in("invoice_id", invoiceIds);
+    dupeIds = new Set((checks ?? []).map((c) => c.invoice_id));
+  }
+
+  const uploads = rows.map((r) => ({
+    ...r,
+    duplicate: r.invoice_id ? dupeIds.has(r.invoice_id) : false,
+  }));
+  return NextResponse.json({ uploads });
 }

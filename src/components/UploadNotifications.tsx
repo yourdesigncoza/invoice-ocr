@@ -10,7 +10,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Loader2, CheckCircle2, XCircle, X } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, X, Copy } from "lucide-react";
 
 type JobStatus = "processing" | "done" | "failed";
 
@@ -19,6 +19,7 @@ interface Job {
   fileName: string;
   status: JobStatus;
   invoiceId?: string;
+  duplicate?: boolean;
 }
 
 interface UploadResult {
@@ -33,6 +34,7 @@ interface StatusRow {
   file_name: string;
   upload_status: JobStatus;
   invoice_id: string | null;
+  duplicate?: boolean;
 }
 
 interface Ctx {
@@ -118,6 +120,7 @@ export function UploadNotificationsProvider({
               ...j,
               status: u.upload_status,
               invoiceId: u.invoice_id ?? undefined,
+              duplicate: u.duplicate,
             };
           }
           return j;
@@ -150,7 +153,10 @@ export function UploadNotificationsProvider({
               {job.status === "processing" && (
                 <Loader2 className="h-5 w-5 shrink-0 animate-spin text-primary mt-0.5" />
               )}
-              {job.status === "done" && (
+              {job.status === "done" && job.duplicate && (
+                <Copy className="h-5 w-5 shrink-0 text-status-duplicate mt-0.5" />
+              )}
+              {job.status === "done" && !job.duplicate && (
                 <CheckCircle2 className="h-5 w-5 shrink-0 text-status-approved mt-0.5" />
               )}
               {job.status === "failed" && (
@@ -160,7 +166,8 @@ export function UploadNotificationsProvider({
                 <div className="text-sm font-medium truncate">{job.fileName}</div>
                 <div className="text-xs text-muted">
                   {job.status === "processing" && "Processing…"}
-                  {job.status === "done" && "Done processing"}
+                  {job.status === "done" &&
+                    (job.duplicate ? "Done — possible duplicate" : "Done processing")}
                   {job.status === "failed" && "Extraction failed"}
                 </div>
                 {job.status === "done" && job.invoiceId && (

@@ -50,15 +50,13 @@ interface PatchBody {
   linkSupplierId?: string;
   createSupplier?: { name: string; vat_number?: string; address?: string };
   // workflow action
-  action?: "approve" | "reject" | "mark_duplicate" | "not_invoice" | "save";
+  action?: "approve" | "reject" | "save";
   correctedFields?: string[]; // names the reviewer manually changed
 }
 
 const ACTION_STATUS: Record<string, InvoiceStatus> = {
   approve: "approved",
   reject: "rejected",
-  mark_duplicate: "duplicate",
-  not_invoice: "not_invoice",
 };
 
 export async function PATCH(

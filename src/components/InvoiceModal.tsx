@@ -13,6 +13,9 @@ import {
   ChevronDown,
   ChevronRight,
   Phone,
+  Copy,
+  Check,
+  Trash2,
 } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ConfidenceBadge } from "@/components/ConfidenceBadge";
@@ -80,6 +83,7 @@ export function InvoiceModal({ invoice }: { invoice: InvoiceWithSupplier }) {
   const [values, setValues] = useState<Record<string, string>>(() => initValues(invoice));
   const [corrected, setCorrected] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
+  const [acting, setActing] = useState<null | "approve" | "delete">(null);
   const [error, setError] = useState<string | null>(null);
   const [showMeta, setShowMeta] = useState(false);
 
@@ -153,6 +157,50 @@ export function InvoiceModal({ invoice }: { invoice: InvoiceWithSupplier }) {
       setSaving(false);
     }
   }
+
+  // accept (approve) the invoice as genuine, despite the duplicate flag
+  async function accept() {
+    setActing("approve");
+    setError(null);
+    try {
+      const res = await fetch(`/api/invoices/${invoice.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "approve" }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Approve failed");
+      close();
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setActing(null);
+    }
+  }
+
+  // delete the invoice (permanent)
+  async function remove() {
+    if (
+      !window.confirm(
+        "Permanently delete this invoice and its file? This cannot be undone.",
+      )
+    )
+      return;
+    setActing("delete");
+    setError(null);
+    try {
+      const res = await fetch(`/api/invoices/${invoice.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Delete failed");
+      close();
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setActing(null);
+    }
+  }
+
+  const isDuplicate = (invoice.duplicate_count ?? 0) > 0;
 
   const supplierName =
     invoice.supplier?.supplier_name || invoice.original_supplier_name || "Unknown supplier";
@@ -299,6 +347,53 @@ export function InvoiceModal({ invoice }: { invoice: InvoiceWithSupplier }) {
               </div>
 
               <div className="p-5 space-y-4">
+                {isDuplicate && (
+                  <div
+                    className="rounded-lg p-3"
+                    style={{ backgroundColor: "#fff7ed", boxShadow: "inset 0 0 0 1px #ea580c33" }}
+                  >
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-status-duplicate mb-1">
+                      <Copy className="h-3.5 w-3.5" /> Possible duplicate
+                    </div>
+                    <p className="text-xs text-foreground/80">
+                      This looks like a duplicate of an existing invoice. Accept it if
+                      it&apos;s genuinely separate, or delete it.
+                    </p>
+                    <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                      <button
+                        onClick={accept}
+                        disabled={acting !== null}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-status-approved px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50 disabled:pointer-events-none"
+                      >
+                        {acting === "approve" ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Check className="h-3.5 w-3.5" />
+                        )}
+                        Accept
+                      </button>
+                      <button
+                        onClick={remove}
+                        disabled={acting !== null}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-status-low hover:bg-red-50 disabled:opacity-50 disabled:pointer-events-none"
+                      >
+                        {acting === "delete" ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5" />
+                        )}
+                        Delete
+                      </button>
+                      <Link
+                        href={`/review/${invoice.id}`}
+                        onClick={close}
+                        className="text-xs font-medium text-[#1572a8] hover:underline"
+                      >
+                        Compare in review →
+                      </Link>
+                    </div>
+                  </div>
+                )}
                 {invoice.warnings?.length > 0 && (
                   <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-2.5">
                     <div className="flex items-center gap-1.5 text-xs font-medium text-status-review mb-1">

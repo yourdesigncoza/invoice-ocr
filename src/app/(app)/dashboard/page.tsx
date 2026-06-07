@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getDashboard, getInvoices, isSupabaseConfigured } from "@/lib/data";
 import { PageHeader, StatCard, Card, NotConfigured, Button } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
+import { DuplicateBadge } from "@/components/DuplicateBadge";
 import { InvoiceModal } from "@/components/InvoiceModal";
 import { formatMoney, formatDate } from "@/lib/utils";
 import { AlertTriangle, Upload } from "lucide-react";
@@ -103,10 +104,17 @@ export default async function DashboardPage() {
                 {recent.map((inv) => (
                   <tr
                     key={inv.id}
-                    className="transition-colors hover:bg-brand-blue/[0.04]"
+                    className={
+                      inv.duplicate_count
+                        ? "bg-orange-50/50 transition-colors hover:bg-orange-50"
+                        : "transition-colors hover:bg-brand-blue/[0.04]"
+                    }
                   >
                     <td className="px-3.5 py-2">
-                      <StatusBadge status={inv.status} />
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <StatusBadge status={inv.status} />
+                        <DuplicateBadge count={inv.duplicate_count} />
+                      </div>
                     </td>
                     <td className="px-3.5 py-2 text-muted">{formatDate(inv.invoice_date)}</td>
                     <td className="px-3.5 py-2 font-medium">
@@ -128,10 +136,14 @@ export default async function DashboardPage() {
             {/* mobile: stacked cards */}
             <div className="divide-y divide-border md:hidden">
               {recent.map((inv) => (
-                <div key={inv.id} className="flex items-start gap-3 p-4">
+                <div
+                  key={inv.id}
+                  className={inv.duplicate_count ? "flex items-start gap-3 p-4 bg-orange-50/50" : "flex items-start gap-3 p-4"}
+                >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <StatusBadge status={inv.status} />
+                      <DuplicateBadge count={inv.duplicate_count} />
                       <span className="text-sm font-medium">
                         {inv.supplier?.supplier_name ||
                           inv.original_supplier_name ||

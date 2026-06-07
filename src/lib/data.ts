@@ -34,7 +34,9 @@ export async function getInvoices(
   if (!supabase) return [];
   let q = supabase
     .from("invoices")
-    .select("*, supplier:suppliers(*)")
+    .select(
+      "*, supplier:suppliers(*), duplicate_checks!duplicate_checks_invoice_id_fkey(count)",
+    )
     .order("invoice_date", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(filters.limit ?? 200);
@@ -56,7 +58,16 @@ export async function getInvoices(
     console.error("getInvoices", error.message);
     return [];
   }
-  return (data ?? []) as InvoiceWithSupplier[];
+  return (data ?? []).map(flattenDuplicateCount) as InvoiceWithSupplier[];
+}
+
+// Supabase returns the aggregate as `duplicate_checks: [{ count }]`; flatten it
+// to a plain `duplicate_count` number and drop the raw relation.
+function flattenDuplicateCount(row: Record<string, unknown>): unknown {
+  const dc = row.duplicate_checks as { count: number }[] | undefined;
+  const { duplicate_checks: _omit, ...rest } = row;
+  void _omit;
+  return { ...rest, duplicate_count: dc?.[0]?.count ?? 0 };
 }
 
 export async function getInvoice(
@@ -66,7 +77,9 @@ export async function getInvoice(
   if (!supabase) return null;
   const { data: invoice } = await supabase
     .from("invoices")
-    .select("*, supplier:suppliers(*)")
+    .select(
+      "*, supplier:suppliers(*), duplicate_checks!duplicate_checks_invoice_id_fkey(count)",
+    )
     .eq("id", id)
     .single();
   if (!invoice) return null;
@@ -75,7 +88,7 @@ export async function getInvoice(
     .select("*")
     .eq("invoice_id", id);
   return {
-    invoice: invoice as InvoiceWithSupplier,
+    invoice: flattenDuplicateCount(invoice) as InvoiceWithSupplier,
     items: (items ?? []) as InvoiceItem[],
   };
 }
