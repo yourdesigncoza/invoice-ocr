@@ -37,6 +37,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local dev/QA artifacts (root-level screenshots; public/ assets are unaffected)
+/.playwright-mcp/
+/*.png
+
 # client sample data — real supplier invoices, kept out of the repo.
 # Drop a hand-picked, de-identified subset into tests/sample_invoices/ instead.
 /WhatsApp*/
