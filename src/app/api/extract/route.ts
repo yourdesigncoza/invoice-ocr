@@ -23,6 +23,7 @@ interface Job {
   dir: string;
   buffer: Buffer;
   mimeType: string;
+  userId: string;
 }
 
 /**
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest) {
   const jobs: Job[] = [];
   const uploads: { id: string | null; fileName: string; ok: boolean; error?: string }[] = [];
   for (const file of files) {
-    const stored = await storeOriginal(supabase, file);
+    const stored = await storeOriginal(supabase, file, user.id);
     if ("error" in stored) {
       uploads.push({ id: null, fileName: stored.fileName, ok: false, error: stored.error });
     } else {
@@ -83,6 +84,7 @@ export async function POST(req: NextRequest) {
 async function storeOriginal(
   supabase: Supabase,
   file: File,
+  userId: string,
 ): Promise<Job | { fileName: string; error: string }> {
   const fileName = file.name || "upload";
   if (!ACCEPTED.includes(file.type)) {
@@ -91,7 +93,8 @@ async function storeOriginal(
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const dir = crypto.randomUUID();
-  const objectPath = `${dir}/${sanitize(fileName)}`;
+  // namespace every object under the owner's uid so Storage RLS can isolate it
+  const objectPath = `${userId}/${dir}/${sanitize(fileName)}`;
 
   // store the original, untouched (PRD §4.5)
   const up = await supabase.storage
@@ -107,6 +110,8 @@ async function storeOriginal(
       file_type: file.type,
       file_size: buffer.length,
       upload_status: "processing",
+      user_id: userId,
+      uploaded_by: userId,
     })
     .select("id")
     .single();
@@ -120,18 +125,19 @@ async function storeOriginal(
     dir,
     buffer,
     mimeType: file.type,
+    userId,
   };
 }
 
 async function processStored(supabase: Supabase, job: Job) {
-  const { docId, fileName, objectPath, dir, buffer, mimeType } = job;
+  const { docId, fileName, objectPath, dir, buffer, mimeType, userId } = job;
   try {
     // preprocess (downscale large images / auto-orient) — only store a processed
     // companion when an actual resize happened (PRD §4.5)
     const pre = await preprocessImage(buffer, mimeType);
     let processedPath: string | null = null;
     if (pre.resized) {
-      processedPath = `${dir}/processed.jpg`;
+      processedPath = `${userId}/${dir}/processed.jpg`;
       await supabase.storage
         .from(STORAGE_BUCKET)
         .upload(processedPath, pre.data, { contentType: pre.mimeType, upsert: true });
@@ -151,6 +157,7 @@ async function processStored(supabase: Supabase, job: Job) {
         ...processed.invoiceFields,
         original_file_path: objectPath,
         processed_file_path: processedPath,
+        user_id: userId,
       })
       .select("id, supplier_id, original_supplier_name, invoice_number, invoice_date, total_incl_vat")
       .single();
@@ -160,6 +167,7 @@ async function processStored(supabase: Supabase, job: Job) {
       await supabase.from("invoice_items").insert(
         processed.extraction.line_items.map((li) => ({
           invoice_id: invoice.id,
+          user_id: userId,
           ...li,
         })),
       );
@@ -169,6 +177,7 @@ async function processStored(supabase: Supabase, job: Job) {
     await supabase.from("extraction_logs").insert({
       document_upload_id: docId,
       invoice_id: invoice.id,
+      user_id: userId,
       provider_name: processed.providerName,
       provider_model: processed.providerModel,
       raw_ocr_text: processed.rawText,
@@ -180,9 +189,10 @@ async function processStored(supabase: Supabase, job: Job) {
       processing_duration_ms: processed.durationMs,
     });
 
-    // duplicate check before approval (PRD §7.10)
+    // duplicate check before approval (PRD §7.10) — scoped to this user
     const dupes = await findDuplicates(supabase, {
       id: invoice.id,
+      user_id: userId,
       supplier_id: invoice.supplier_id,
       original_supplier_name: invoice.original_supplier_name,
       invoice_number: invoice.invoice_number,
@@ -193,6 +203,7 @@ async function processStored(supabase: Supabase, job: Job) {
       await supabase.from("duplicate_checks").insert(
         dupes.map((d) => ({
           invoice_id: invoice.id,
+          user_id: userId,
           possible_duplicate_invoice_id: d.invoice.id,
           match_score: d.score,
           match_reason: d.reason,
@@ -212,6 +223,7 @@ async function processStored(supabase: Supabase, job: Job) {
       .eq("id", docId);
     await supabase.from("extraction_logs").insert({
       document_upload_id: docId,
+      user_id: userId,
       provider_name: "openai_vision",
       errors: [message],
       warnings: [],

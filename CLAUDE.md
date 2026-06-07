@@ -29,23 +29,33 @@ Not an OCR tool — an invoice **intelligence** layer. Extraction is the front d
 
 The MVP is strictly **human-assisted**: extract → confidence-score → human reviews side-by-side with the original image → only **approved** records are trusted. Dashboards default to approved invoices only. Never auto-approve on raw extraction output.
 
-## Security & auth status — ⚠️ DEPLOY BLOCKER
+## Security & auth status — multi-tenant SaaS
 
-**The app currently has NO authentication.** Every route handler and server
-data path uses the service-role Supabase client (`createAdminSupabase`), which
-bypasses RLS. Anyone who can reach a URL can read any invoice, fetch signed file
-URLs, and mutate/approve records (IDOR). This is a deliberately deferred MVP gap
-(PRD §13.4 "login required", §5 RBAC = Phase 2) — **acceptable only for
-local/private use. Add the auth gate before any public Vercel deploy.**
+**The product pivoted from single-tenant to multi-tenant** (this overrides the
+old PRD §5 single-tenant model). Each user signs up (email + password, email
+confirmation on), logs in, and owns their **own private** invoices / suppliers /
+sites; **John (`ADMIN_EMAILS`) is the sole super-admin** managing user accounts
+only (not their data).
 
-The data model is **single-tenant** (admin/reviewer/management all see all
-invoices, PRD §5), so the missing control is *authentication*, not per-row
-ownership — don't add `owner_id` scoping. The fix:
-1. Supabase Auth (email/password or magic link) + login page.
-2. `middleware.ts` that redirects unauthenticated users and refreshes the session.
-3. Switch server reads to the cookie-bound `createServerSupabase()` (honors the
-   existing `authenticated using (true)` RLS) and gate route handlers on a valid
-   session; keep `createAdminSupabase()` only for the extraction pipeline writes.
+How it's enforced (do NOT regress to service-role-everywhere):
+- **Auth gate (Phase 1, done):** Next 16 `src/proxy.ts` (renamed middleware)
+  refreshes the session + redirects to `/login`; `(auth)` route group
+  (login/signup/forgot/reset + `/auth/callback`); `src/lib/auth-guards.ts`
+  (`getUser`/`requireUser`/`isAdminEmail`/`requireAdmin`).
+- **Per-user isolation (Phase 2, done):** every owned table has a
+  `user_id uuid → auth.users` column; RLS is `user_id = auth.uid()` (migration
+  `0006_multitenant.sql`); Storage objects live under `${userId}/…` with
+  path-prefix Storage policies.
+- **Client rules:** reads + interactive route handlers use the cookie-bound
+  **`createServerSupabase()`** (RLS auto-scopes to the caller — this is the IDOR
+  protection; don't add manual `owner_id` filters on top). The **only** legit
+  `createAdminSupabase()` uses are: the extraction pipeline's background `after()`
+  work (no session post-response — it stamps `user_id` explicitly) and admin
+  account management (`svc.auth.admin.*`). Background/admin queries that touch
+  tenant data MUST filter by `user_id` (e.g. `findDuplicates`).
+- **Still open:** admin dashboard (Phase 3), sites/Settings (Phase 4). Open
+  signup spends the OpenAI budget — add rate-limit/BotID before public launch;
+  enable Supabase "leaked password protection".
 
 ## Commands
 

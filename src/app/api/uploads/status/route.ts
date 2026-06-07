@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminSupabase } from "@/lib/supabase/server";
+import { createServerSupabase } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth-guards";
 
 export const runtime = "nodejs";
@@ -20,7 +20,9 @@ export async function GET(req: NextRequest) {
   if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const supabase = createAdminSupabase();
+  // RLS scopes document_uploads + duplicate_checks to the caller, so the `ids`
+  // lookup is automatically intersected with the user's own uploads.
+  const supabase = await createServerSupabase();
   if (!supabase)
     return NextResponse.json({ uploads: [] });
 

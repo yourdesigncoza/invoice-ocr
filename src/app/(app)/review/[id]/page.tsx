@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getInvoice, isSupabaseConfigured } from "@/lib/data";
-import { createAdminSupabase } from "@/lib/supabase/server";
+import { createServerSupabase } from "@/lib/supabase/server";
 import { findSupplierMatches } from "@/lib/suppliers/matching";
 import { STORAGE_BUCKET } from "@/lib/constants";
 import { PageHeader, NotConfigured } from "@/components/ui";
@@ -26,7 +26,7 @@ export default async function ReviewDetailPage(
   if (!result) notFound();
   const { invoice, items } = result;
 
-  const supabase = createAdminSupabase()!;
+  const supabase = (await createServerSupabase())!;
 
   // signed preview URL for the original (untouched) file
   let imageUrl: string | null = null;

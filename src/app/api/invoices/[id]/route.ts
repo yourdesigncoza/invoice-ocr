@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminSupabase } from "@/lib/supabase/server";
+import { createServerSupabase } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth-guards";
 import { normalizeName } from "@/lib/suppliers/matching";
 import { STORAGE_BUCKET, type InvoiceStatus } from "@/lib/constants";
 
 export const runtime = "nodejs";
 
+// Every handler runs as the signed-in user via the cookie-bound client, so RLS
+// (user_id = auth.uid()) makes cross-tenant reads/writes/deletes impossible —
+// an invoice that isn't yours simply isn't visible (404), no ownership checks
+// to forget. Storage RLS isolates files by the <user_id>/ path prefix.
+
 /**
  * Preview payload for the invoice modal: a signed URL for the original file
- * (private bucket) plus line items. The row fields the modal already has from
- * the table, so this only fetches what the table didn't carry.
+ * (private bucket) plus line items.
  */
 export async function GET(
   _req: NextRequest,
@@ -17,10 +21,8 @@ export async function GET(
 ) {
   if (!(await getUser()))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!(await getUser()))
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
-  const supabase = createAdminSupabase();
+  const supabase = await createServerSupabase();
   if (!supabase)
     return NextResponse.json({ error: "Supabase not configured" }, { status: 503 });
 
@@ -68,10 +70,11 @@ export async function PATCH(
   req: NextRequest,
   ctx: RouteContext<"/api/invoices/[id]">,
 ) {
-  if (!(await getUser()))
+  const user = await getUser();
+  if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
-  const supabase = createAdminSupabase();
+  const supabase = await createServerSupabase();
   if (!supabase)
     return NextResponse.json({ error: "Supabase not configured" }, { status: 503 });
 
@@ -96,6 +99,7 @@ export async function PATCH(
         normalized_name: normalizeName(body.createSupplier.name),
         vat_number: body.createSupplier.vat_number ?? null,
         address: body.createSupplier.address ?? null,
+        user_id: user.id,
       })
       .select("id")
       .single();
@@ -111,6 +115,7 @@ export async function PATCH(
     update.status = ACTION_STATUS[body.action];
     if (body.action === "approve") {
       update.approved_at = new Date().toISOString();
+      update.approved_by = user.id;
     }
   }
 
@@ -125,6 +130,7 @@ export async function PATCH(
 
   // audit log of the change (PRD §11.7 / §13.3)
   await supabase.from("audit_logs").insert({
+    user_id: user.id,
     action: body.action ?? "save",
     entity_type: "invoice",
     entity_id: id,
@@ -138,10 +144,12 @@ export async function PATCH(
     await supabase.from("extraction_fields").insert(
       body.correctedFields.map((name) => ({
         invoice_id: id,
+        user_id: user.id,
         field_name: name,
         normalized_value: String((body.fields ?? {})[name] ?? ""),
         source_type: "manual",
         was_manually_corrected: true,
+        corrected_by: user.id,
       })),
     );
   }
@@ -161,10 +169,11 @@ export async function DELETE(
   _req: NextRequest,
   ctx: RouteContext<"/api/invoices/[id]">,
 ) {
-  if (!(await getUser()))
+  const user = await getUser();
+  if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await ctx.params;
-  const supabase = createAdminSupabase();
+  const supabase = await createServerSupabase();
   if (!supabase)
     return NextResponse.json({ error: "Supabase not configured" }, { status: 503 });
 
@@ -178,6 +187,7 @@ export async function DELETE(
 
   // audit first — irreversible action, record prior state before it's gone
   await supabase.from("audit_logs").insert({
+    user_id: user.id,
     action: "delete",
     entity_type: "invoice",
     entity_id: id,

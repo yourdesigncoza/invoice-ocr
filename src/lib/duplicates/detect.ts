@@ -22,6 +22,7 @@ export interface DuplicateHit {
 
 export interface DuplicateProbe {
   id?: string; // exclude self when re-checking an existing invoice
+  user_id: string; // tenant scope — never match across users
   supplier_id: string | null;
   original_supplier_name?: string | null;
   invoice_number: string | null;
@@ -40,6 +41,7 @@ export async function findDuplicates(
   let query = supabase
     .from("invoices")
     .select("*")
+    .eq("user_id", probe.user_id) // tenant isolation (admin client bypasses RLS)
     .eq("total_incl_vat", probe.total_incl_vat)
     .neq("status", "rejected");
 
