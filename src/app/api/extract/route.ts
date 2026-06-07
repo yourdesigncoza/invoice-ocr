@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminSupabase } from "@/lib/supabase/server";
 import { processInvoice } from "@/lib/extraction";
+import { preprocessImage } from "@/lib/extraction/preprocess";
 import { findDuplicates } from "@/lib/duplicates/detect";
 import { STORAGE_BUCKET } from "@/lib/constants";
 
@@ -45,8 +46,8 @@ async function ingestOne(
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  // Stable-ish object path without Date.now()/random (unavailable here):
-  const objectPath = `${crypto.randomUUID()}/${sanitize(fileName)}`;
+  const dir = crypto.randomUUID();
+  const objectPath = `${dir}/${sanitize(fileName)}`;
 
   // 1. store the original, untouched (PRD §4.5)
   const up = await supabase.storage
@@ -54,6 +55,19 @@ async function ingestOne(
     .upload(objectPath, buffer, { contentType: file.type, upsert: false });
   if (up.error)
     return { fileName, ok: false, error: `Storage: ${up.error.message}` };
+
+  // 1b. preprocess (downscale large images / auto-orient). Extraction runs on
+  // the result to cut vision token cost + latency. Only large images are
+  // re-encoded; already-small photos pass through untouched (no inflation), so
+  // we only store a processed companion when an actual resize happened.
+  const pre = await preprocessImage(buffer, file.type);
+  let processedPath: string | null = null;
+  if (pre.resized) {
+    processedPath = `${dir}/processed.jpg`;
+    await supabase.storage
+      .from(STORAGE_BUCKET)
+      .upload(processedPath, pre.data, { contentType: pre.mimeType, upsert: true });
+  }
 
   const { data: doc } = await supabase
     .from("document_uploads")
@@ -67,11 +81,11 @@ async function ingestOne(
     .select("id")
     .single();
 
-  // 2. extract
+  // 2. extract (from the preprocessed image)
   try {
     const processed = await processInvoice({
-      data: buffer,
-      mimeType: file.type,
+      data: pre.data,
+      mimeType: pre.mimeType,
       fileName,
     });
 
@@ -81,6 +95,7 @@ async function ingestOne(
       .insert({
         ...processed.invoiceFields,
         original_file_path: objectPath,
+        processed_file_path: processedPath,
       })
       .select("id, supplier_id, invoice_number, invoice_date, total_incl_vat")
       .single();

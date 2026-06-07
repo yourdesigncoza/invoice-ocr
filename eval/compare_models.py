@@ -96,8 +96,32 @@ def load_key():
     return env["OPENAI_API_KEY"]
 
 
+MAX_SIDE = 1568  # mirror src/lib/extraction/preprocess.ts
+
+
+def preprocess_b64(img_path):
+    """Downscale/auto-orient to match production preprocessing, return base64 JPEG."""
+    try:
+        from PIL import Image, ImageOps
+        with Image.open(img_path) as probe:
+            w, h = probe.size
+        # already within the cap -> send original bytes untouched (mirror prod)
+        if max(w, h) <= MAX_SIDE:
+            return base64.b64encode(open(img_path, "rb").read()).decode()
+        im = ImageOps.exif_transpose(Image.open(img_path))
+        if im.mode not in ("RGB", "L"):
+            im = im.convert("RGB")
+        s = MAX_SIDE / max(w, h)
+        im = im.resize((int(w * s), int(h * s)), Image.Resampling.LANCZOS)
+        buf = __import__("io").BytesIO()
+        im.save(buf, format="JPEG", quality=85)
+        return base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        return base64.b64encode(open(img_path, "rb").read()).decode()
+
+
 def extract(api_key, model, img_path):
-    data = base64.b64encode(open(img_path, "rb").read()).decode()
+    data = preprocess_b64(img_path)
     payload = {"model": model, "temperature": 0,
                "response_format": {"type": "json_schema", "json_schema": SCHEMA},
                "messages": [{"role": "system", "content": SYSTEM_PROMPT},
