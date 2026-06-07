@@ -45,6 +45,10 @@ yarn-error.log*
 /eval/results.json
 /eval/results/
 
+# exported CSVs (real invoice data) + editor lock files
+/*.csv
+.~lock.*#
+
 # client sample data — real supplier invoices, kept out of the repo.
 # Drop a hand-picked, de-identified subset into tests/sample_invoices/ instead.
 /WhatsApp*/

@@ -233,7 +233,7 @@ export function InvoiceModal({ invoice }: { invoice: InvoiceWithSupplier }) {
           onClick={close}
         >
           <div
-            className="bg-surface rounded-xl shadow-2xl w-full max-w-4xl max-h-[88vh] flex flex-col overflow-hidden"
+            className="bg-surface rounded-xl border border-border w-full max-w-4xl max-h-[88vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* header */}
@@ -291,7 +291,7 @@ export function InvoiceModal({ invoice }: { invoice: InvoiceWithSupplier }) {
                   <img
                     src={imageUrl}
                     alt="Original invoice"
-                    className="max-w-full rounded-lg shadow-sm ring-1 ring-black/5"
+                    className="max-w-full rounded-lg ring-1 ring-black/5"
                   />
                 )}
               </div>

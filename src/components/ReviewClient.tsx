@@ -190,7 +190,7 @@ export function ReviewClient({
             <img
               src={imageUrl}
               alt="Original invoice"
-              className="max-w-full rounded-lg shadow-md ring-1 ring-black/5"
+              className="max-w-full rounded-lg ring-1 ring-black/5"
             />
           )}
         </div>
