@@ -49,6 +49,7 @@ export interface InvoiceFields {
   reference_number: string | null;
   vat_number: string | null;
   address: string | null;
+  phone: string | null;
   confidence_score: number;
   status: InvoiceStatus;
   warnings: string[];
@@ -107,6 +108,7 @@ function flatten(
     reference_number: ex.invoice.reference_number,
     vat_number: ex.supplier.vat_number,
     address: ex.supplier.address,
+    phone: ex.supplier.phone,
     confidence_score: confidence,
     status,
     warnings,

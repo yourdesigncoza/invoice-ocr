@@ -38,6 +38,7 @@ export interface Invoice {
   reference_number: string | null;
   vat_number: string | null;
   address: string | null;
+  phone: string | null;
   confidence_score: number | null;
   status: InvoiceStatus;
   warnings: string[];
