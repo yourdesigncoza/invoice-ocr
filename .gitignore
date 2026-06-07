@@ -41,6 +41,10 @@ yarn-error.log*
 /.playwright-mcp/
 /*.png
 
+# model-eval output — contains extracted data from real client receipts
+/eval/results.json
+/eval/results/
+
 # client sample data — real supplier invoices, kept out of the repo.
 # Drop a hand-picked, de-identified subset into tests/sample_invoices/ instead.
 /WhatsApp*/
