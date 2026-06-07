@@ -53,11 +53,9 @@ export function bucketKey(isoDate: string, group: GroupBy): string {
   const y = d.getFullYear();
   switch (group) {
     case "day":
-      return isoDate;
-    case "week": {
-      const week = isoWeek(d);
-      return `Week ${week}, ${y}`;
-    }
+      return d.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
+    case "week":
+      return weekLabel(d);
     case "month":
       return d.toLocaleDateString("en-ZA", { year: "numeric", month: "short" });
     case "quarter":
@@ -67,11 +65,48 @@ export function bucketKey(isoDate: string, group: GroupBy): string {
   }
 }
 
-function isoWeek(d: Date): number {
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dayNum = (date.getUTCDay() + 6) % 7;
-  date.setUTCDate(date.getUTCDate() - dayNum + 3);
-  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
-  const diff = date.getTime() - firstThursday.getTime();
-  return 1 + Math.round(diff / (7 * 24 * 3600 * 1000));
+/** The from/to date window of the bucket that contains `isoDate` (PRD §7.8). */
+export function bucketRange(isoDate: string, group: GroupBy): DateRange {
+  const d = new Date(isoDate);
+  const y = d.getFullYear();
+  const m = d.getMonth();
+  switch (group) {
+    case "day":
+      return { from: isoDate, to: isoDate };
+    case "week": {
+      const day = (d.getDay() + 6) % 7; // Monday = 0
+      const start = new Date(d);
+      start.setDate(d.getDate() - day);
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      return { from: iso(start), to: iso(end) };
+    }
+    case "month":
+      return { from: iso(new Date(y, m, 1)), to: iso(new Date(y, m + 1, 0)) };
+    case "quarter": {
+      const q = Math.floor(m / 3);
+      return { from: iso(new Date(y, q * 3, 1)), to: iso(new Date(y, q * 3 + 3, 0)) };
+    }
+    case "year":
+      return { from: iso(new Date(y, 0, 1)), to: iso(new Date(y, 11, 31)) };
+  }
+}
+
+/**
+ * Human week label as a date range rather than an ISO week number, e.g.
+ * "Jul 13–19, 2026" (same month) or "Dec 29 – Jan 4, 2026" (spanning months).
+ * Week runs Monday–Sunday.
+ */
+function weekLabel(d: Date): string {
+  const day = (d.getDay() + 6) % 7; // Monday = 0
+  const start = new Date(d);
+  start.setDate(d.getDate() - day);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  const mon = (x: Date) => x.toLocaleDateString("en-ZA", { month: "short" });
+  const yr = end.getFullYear();
+  if (start.getMonth() === end.getMonth()) {
+    return `${mon(start)} ${start.getDate()}–${end.getDate()}, ${yr}`;
+  }
+  return `${mon(start)} ${start.getDate()} – ${mon(end)} ${end.getDate()}, ${yr}`;
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getInvoices, isSupabaseConfigured } from "@/lib/data";
-import { bucketKey, type GroupBy } from "@/lib/periods";
+import { bucketKey, bucketRange, type GroupBy } from "@/lib/periods";
+import { ChevronRight } from "lucide-react";
 import { PageHeader, NotConfigured, Card } from "@/components/ui";
 import { formatMoney, cn } from "@/lib/utils";
 
@@ -28,13 +29,20 @@ export default async function ReportsPage(props: PageProps<"/reports">) {
   // bucket spend/vat/count + top supplier per period
   const buckets = new Map<
     string,
-    { spend: number; vat: number; count: number; suppliers: Map<string, number> }
+    {
+      spend: number;
+      vat: number;
+      count: number;
+      date: string; // any date inside the bucket → used to derive its range
+      suppliers: Map<string, number>;
+    }
   >();
   for (const i of approved) {
     if (!i.invoice_date) continue;
     const key = bucketKey(i.invoice_date, group);
     const b =
-      buckets.get(key) ?? { spend: 0, vat: 0, count: 0, suppliers: new Map() };
+      buckets.get(key) ??
+      { spend: 0, vat: 0, count: 0, date: i.invoice_date, suppliers: new Map() };
     b.spend += Number(i.total_incl_vat ?? 0);
     b.vat += Number(i.vat_amount ?? 0);
     b.count += 1;
@@ -42,7 +50,11 @@ export default async function ReportsPage(props: PageProps<"/reports">) {
     b.suppliers.set(sup, (b.suppliers.get(sup) ?? 0) + Number(i.total_incl_vat ?? 0));
     buckets.set(key, b);
   }
-  const rows = [...buckets.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1));
+  // sort chronologically (newest first) by the bucket's date, not its label —
+  // week/month labels don't string-sort in date order.
+  const rows = [...buckets.entries()].sort((a, b) =>
+    a[1].date < b[1].date ? 1 : -1,
+  );
 
   return (
     <>
@@ -83,25 +95,40 @@ export default async function ReportsPage(props: PageProps<"/reports">) {
               <th className="px-4 py-2.5 font-medium text-right">VAT</th>
               <th className="px-4 py-2.5 font-medium text-right">Invoices</th>
               <th className="px-4 py-2.5 font-medium">Top Supplier</th>
+              <th className="px-4 py-2.5"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {rows.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-muted">
+                <td colSpan={6} className="px-4 py-8 text-center text-muted">
                   No approved invoices yet.
                 </td>
               </tr>
             )}
             {rows.map(([period, b]) => {
               const top = [...b.suppliers.entries()].sort((a, c) => c[1] - a[1])[0];
+              const range = bucketRange(b.date, group);
+              const href = `/reports/detail?group=${group}&from=${range.from}&to=${range.to}&label=${encodeURIComponent(period)}`;
               return (
                 <tr key={period} className="hover:bg-slate-50">
-                  <td className="px-4 py-2.5 font-medium">{period}</td>
+                  <td className="px-4 py-2.5 font-medium">
+                    <Link href={href} className="hover:text-primary">
+                      {period}
+                    </Link>
+                  </td>
                   <td className="px-4 py-2.5 text-right tabular-nums font-medium">{formatMoney(b.spend)}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-muted">{formatMoney(b.vat)}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums">{b.count}</td>
                   <td className="px-4 py-2.5 text-muted">{top ? top[0] : "—"}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    <Link
+                      href={href}
+                      className="inline-flex items-center text-primary hover:underline whitespace-nowrap"
+                    >
+                      View <ChevronRight className="h-4 w-4" />
+                    </Link>
+                  </td>
                 </tr>
               );
             })}
