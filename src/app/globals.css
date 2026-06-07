@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+/* ── PRD §10 palette ───────────────────────────────────────────── */
+:root {
+  --background: #f8fafc; /* soft off-white workspace */
+  --surface: #ffffff; /* cards / tables */
+  --border: #e2e8f0; /* light slate */
+  --sidebar: #0f172a; /* deep slate/navy */
+  --foreground: #0f172a;
+  --muted: #64748b; /* secondary text */
+  --primary: #2563eb; /* modern blue */
+  --accent: #06b6d4; /* cyan */
+
+  /* status colours (PRD §10.2) */
+  --status-approved: #16a34a;
+  --status-review: #f59e0b;
+  --status-low: #dc2626;
+  --status-duplicate: #ea580c;
+  --status-processing: #3b82f6;
+  --status-rejected: #6b7280;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-sidebar: var(--sidebar);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-primary: var(--primary);
+  --color-accent: var(--accent);
+
+  --color-status-approved: var(--status-approved);
+  --color-status-review: var(--status-review);
+  --color-status-low: var(--status-low);
+  --color-status-duplicate: var(--status-duplicate);
+  --color-status-processing: var(--status-processing);
+  --color-status-rejected: var(--status-rejected);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+/* thin slate scrollbars to keep the finance-tool feel */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
