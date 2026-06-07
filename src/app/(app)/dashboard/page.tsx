@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getDashboard, getInvoices, isSupabaseConfigured } from "@/lib/data";
+import { getDashboard, getInvoices, getActiveProjects, isSupabaseConfigured } from "@/lib/data";
 import { PageHeader, StatCard, Card, NotConfigured, Button } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
 import { DuplicateBadge } from "@/components/DuplicateBadge";
@@ -19,10 +19,12 @@ export default async function DashboardPage() {
     );
   }
 
-  const [data, recent] = await Promise.all([
+  const [data, recent, activeProjects] = await Promise.all([
     getDashboard(),
     getInvoices({ limit: 8 }),
+    getActiveProjects(),
   ]);
+  const siteProjects = activeProjects.length >= 2 ? activeProjects : [];
 
   return (
     <>
@@ -126,7 +128,7 @@ export default async function DashboardPage() {
                       {formatMoney(inv.total_incl_vat, inv.currency_code)}
                     </td>
                     <td className="px-3.5 py-2 text-right">
-                      <InvoiceModal invoice={inv} />
+                      <InvoiceModal invoice={inv} projects={siteProjects} />
                     </td>
                   </tr>
                 ))}
@@ -159,7 +161,7 @@ export default async function DashboardPage() {
                       {formatMoney(inv.total_incl_vat, inv.currency_code)}
                     </span>
                     <div className="mt-1">
-                      <InvoiceModal invoice={inv} />
+                      <InvoiceModal invoice={inv} projects={siteProjects} />
                     </div>
                   </div>
                 </div>

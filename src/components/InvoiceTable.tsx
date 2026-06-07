@@ -3,15 +3,17 @@ import { DuplicateBadge } from "@/components/DuplicateBadge";
 import { ConfidenceBadge } from "@/components/ConfidenceBadge";
 import { InvoiceModal } from "@/components/InvoiceModal";
 import { formatMoney, formatDate } from "@/lib/utils";
-import type { InvoiceWithSupplier } from "@/lib/types";
+import type { InvoiceWithSupplier, Project } from "@/lib/types";
 
 /** Airtable-style invoice register table (PRD §7.6). */
 export function InvoiceTable({
   invoices,
   showProject = false,
+  projects = [],
 }: {
   invoices: InvoiceWithSupplier[];
   showProject?: boolean;
+  projects?: Project[];
 }) {
   if (invoices.length === 0) {
     return (
@@ -67,7 +69,7 @@ export function InvoiceTable({
                 </Td>
                 <Td className="text-right"><ConfidenceBadge score={inv.confidence_score} /></Td>
                 <Td className="text-right">
-                  <InvoiceModal invoice={inv} />
+                  <InvoiceModal invoice={inv} projects={projects} />
                 </Td>
               </tr>
             ))}

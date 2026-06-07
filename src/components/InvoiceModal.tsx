@@ -21,7 +21,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { ConfidenceBadge } from "@/components/ConfidenceBadge";
 import { formatMoney, formatDate, formatVat } from "@/lib/utils";
 import { DOCUMENT_TYPES, PAYMENT_METHODS } from "@/lib/constants";
-import type { InvoiceWithSupplier, InvoiceItem } from "@/lib/types";
+import type { InvoiceWithSupplier, InvoiceItem, Project } from "@/lib/types";
 
 /**
  * "View" trigger + invoice preview modal. Most fields come from the row the
@@ -71,7 +71,13 @@ function initValues(invoice: InvoiceWithSupplier): Record<string, string> {
   return v;
 }
 
-export function InvoiceModal({ invoice }: { invoice: InvoiceWithSupplier }) {
+export function InvoiceModal({
+  invoice,
+  projects = [],
+}: {
+  invoice: InvoiceWithSupplier;
+  projects?: Project[];
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -81,6 +87,7 @@ export function InvoiceModal({ invoice }: { invoice: InvoiceWithSupplier }) {
 
   const [editing, setEditing] = useState(false);
   const [values, setValues] = useState<Record<string, string>>(() => initValues(invoice));
+  const [projectId, setProjectId] = useState<string>(invoice.project_id ?? "");
   const [corrected, setCorrected] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [acting, setActing] = useState<null | "approve" | "delete">(null);
@@ -128,10 +135,13 @@ export function InvoiceModal({ invoice }: { invoice: InvoiceWithSupplier }) {
 
   function startEdit() {
     setValues(initValues(invoice));
+    setProjectId(invoice.project_id ?? "");
     setCorrected(new Set());
     setError(null);
     setEditing(true);
   }
+
+  const projectChanged = projectId !== (invoice.project_id ?? "");
 
   async function save() {
     setSaving(true);
@@ -145,7 +155,12 @@ export function InvoiceModal({ invoice }: { invoice: InvoiceWithSupplier }) {
       const res = await fetch(`/api/invoices/${invoice.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "save", fields, correctedFields: [...corrected] }),
+        body: JSON.stringify({
+          action: "save",
+          fields,
+          correctedFields: [...corrected],
+          linkProjectId: projectId,
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Save failed");
@@ -238,7 +253,7 @@ export function InvoiceModal({ invoice }: { invoice: InvoiceWithSupplier }) {
           <select
             value={values[f.key]}
             onChange={(e) => setField(f.key, e.target.value)}
-            className={inputCls(corrected.has(f.key))}
+            className={inputCls(corrected.has(f.key)).replace("text-right", "text-left")}
           >
             <option value="">—</option>
             {f.options!.map((o) => (
@@ -346,7 +361,7 @@ export function InvoiceModal({ invoice }: { invoice: InvoiceWithSupplier }) {
                 )}
               </div>
 
-              <div className="p-5 space-y-4">
+              <div className="p-5 pr-7 space-y-4">
                 {isDuplicate && (
                   <div
                     className="rounded-lg p-3"
@@ -404,6 +419,28 @@ export function InvoiceModal({ invoice }: { invoice: InvoiceWithSupplier }) {
                         <li key={i}>{w}</li>
                       ))}
                     </ul>
+                  </div>
+                )}
+
+                {projects.length > 0 && (
+                  <div className="flex items-center justify-between gap-3 border-b border-border pb-2 text-sm">
+                    <span className="text-muted shrink-0">Site</span>
+                    {editing ? (
+                      <select
+                        value={projectId}
+                        onChange={(e) => setProjectId(e.target.value)}
+                        className={inputCls(projectChanged).replace("text-right", "text-left")}
+                      >
+                        <option value="">No site</option>
+                        {projects.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span>{invoice.project?.name || "—"}</span>
+                    )}
                   </div>
                 )}
 
@@ -470,7 +507,7 @@ export function InvoiceModal({ invoice }: { invoice: InvoiceWithSupplier }) {
                   </button>
                   <button
                     onClick={save}
-                    disabled={saving || corrected.size === 0}
+                    disabled={saving || (corrected.size === 0 && !projectChanged)}
                     className="inline-flex items-center gap-2 rounded-lg bg-primary text-white px-3.5 py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:pointer-events-none"
                   >
                     {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}

@@ -100,7 +100,11 @@ export default async function InvoicesPage(props: PageProps<"/invoices">) {
         )}
       </div>
 
-      <InvoiceTable invoices={invoices} showProject={sitesEnabled} />
+      <InvoiceTable
+        invoices={invoices}
+        showProject={sitesEnabled}
+        projects={sitesEnabled ? activeProjects : []}
+      />
     </>
   );
 }
