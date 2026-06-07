@@ -34,7 +34,7 @@ Extract the data into the required JSON schema. Follow these rules exactly:
 3. Dates must be ISO format YYYY-MM-DD. Convert formats like 27/05/26 -> 2026-05-27. South African dates are day/month/year. If a date is ambiguous or unreadable, return null.
 4. For each important field, also return the original detected text in "raw_value" and a "confidence" between 0 and 1 reflecting how legible/certain that specific field is.
 5. Currency defaults to "ZAR" unless another currency is clearly shown.
-6. Classify document_type as one of: {", ".join(DOCUMENT_TYPES)}.
+6. Classify document_type as one of: {", ".join(DOCUMENT_TYPES)}. Choose the MOST SPECIFIC type that applies — e.g. use "Prepaid Electricity" for prepaid electricity / utility purchase slips, not the generic "Purchase Notice".
 7. payment_method is one of: {", ".join(PAYMENT_METHODS)}, or null.
 8. Provide supplier.raw_name exactly as printed, and supplier.normalized_name as a cleaned canonical form.
 9. Extract line_items when legible; thermal-slip line items are often unreliable — when unsure, leave the array empty and add a warning rather than guessing.
