@@ -35,6 +35,21 @@ export function similarity(a: string, b: string): number {
   return 1 - dist / Math.max(a.length, b.length);
 }
 
+/**
+ * Token containment in [0,1]: how many of the smaller name's words appear in
+ * the larger. Order-insensitive, so "spar hartenbos" and "hartenbos spar and
+ * tops" score 1.0. Ignored for single-token names to avoid over-matching a
+ * common word like "spar".
+ */
+export function tokenOverlap(a: string, b: string): number {
+  const ta = new Set(a.split(" ").filter(Boolean));
+  const tb = new Set(b.split(" ").filter(Boolean));
+  if (Math.min(ta.size, tb.size) < 2) return 0;
+  let inter = 0;
+  for (const t of ta) if (tb.has(t)) inter++;
+  return inter / Math.min(ta.size, tb.size);
+}
+
 function levenshtein(a: string, b: string): number {
   const m = a.length;
   const n = b.length;
@@ -88,17 +103,20 @@ export function rankSuppliers(
       continue;
     }
     if (norm) {
-      const sim = similarity(norm, normalizeName(c.normalized_name || c.supplier_name));
-      if (sim >= 0.8) {
+      const candNorm = normalizeName(c.normalized_name || c.supplier_name);
+      // levenshtein is word-order sensitive; token overlap catches reordered /
+      // abbreviated variants ("Hartenbos Spar & Tops" vs "SPAR Hartenbos").
+      const best = Math.max(similarity(norm, candNorm), tokenOverlap(norm, candNorm));
+      if (best >= 0.8) {
         matches.push({
           supplier: c,
-          score: 0.6 + sim * 0.35,
-          reason: `Fuzzy name match (${Math.round(sim * 100)}%)`,
+          score: 0.6 + best * 0.35,
+          reason: `Fuzzy name match (${Math.round(best * 100)}%)`,
         });
         continue;
       }
       // address tiebreaker for weak name matches
-      if (sim >= 0.5 && signals.address && c.address) {
+      if (best >= 0.5 && signals.address && c.address) {
         const aSim = similarity(
           normalizeName(signals.address),
           normalizeName(c.address),
