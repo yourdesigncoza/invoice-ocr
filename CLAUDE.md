@@ -85,13 +85,16 @@ src/
     (auth)/                 # login / signup / forgot / reset (public route group)
     auth/callback/          # PKCE code exchange (email confirm + recovery)
     (app)/                  # gated app: dashboard, upload, review, invoices, suppliers,
-                            #   duplicates, reports, settings (sites + account), admin
+                            #   duplicates, reports, settings (currency + sites + account), admin
     api/                    # route handlers: extract, invoices/[id], uploads/status,
-                            #   export, projects, admin/users/*
-  components/               # UI: sidebar, status/duplicate badges, tables, review pane,
-                            #   AuthForm, modals, SitesManager, AdminUsersClient
+                            #   export, projects, settings, admin/users/*
+    manifest.ts             # PWA web-app manifest (installable to phone home screen)
+  components/               # UI: sidebar, status/duplicate/paid badges, tables, review pane,
+                            #   AuthForm, modals, SitesManager, AdminUsersClient, CurrencyCard,
+                            #   InstallPrompt + ServiceWorkerRegister (PWA)
   lib/
     auth-guards.ts          # getUser / requireUser / isAdminEmail / requireAdmin
+    pwaInstall.ts           # captures beforeinstallprompt for the install banner
     supabase/               # server.ts (createServerSupabase = cookie/RLS + createAdminSupabase
                             #   = service role), client.ts (browser)
     data.ts                 # all server reads (RLS-scoped via createServerSupabase)
@@ -104,10 +107,19 @@ src/
     suppliers/matching.ts   # multi-signal supplier matching (pass an RLS-scoped client)
     duplicates/detect.ts    # duplicate scoring (user-scoped probe)
     export/                 # CSV builders
-supabase/migrations/        # SQL schema (0001 init … 0006 multitenant)
+supabase/migrations/        # SQL schema (0001 init … 0006 multitenant, 0007 user_settings)
+public/                     # static assets + PWA: sw.js (offline shell), offline.html, icons/
 eval/                       # accuracy harness vs hand-labelled gold set (labels.json gitignored)
 tests/                      # vitest unit tests + sample_invoices/ fixtures
 ```
+
+**PWA:** the app is installable. `app/manifest.ts` + `public/icons/` (note: the
+**maskable** icon needs safe-zone padding — Android zooms it), `public/sw.js` is
+a minimal offline shell that **never caches `/api`, authenticated HTML, or
+Supabase signed URLs**, and `ServiceWorkerRegister` (root layout) registers it
+**in production only**. `InstallPrompt` is a mobile-only floating bottom banner
+(`md:hidden`, mounted once in `(app)/layout.tsx`). `proxy.ts`'s matcher must
+exempt `sw.js` + `offline.html` so they stay publicly fetchable.
 
 The extraction engine is **provider-abstracted from day one** — one entry point regardless of backend, mirroring the PRD's `processor.process_invoice(file, schema, provider)`. Pipeline (each stage discrete so a regression is isolatable):
 
@@ -125,7 +137,7 @@ Correctness requirements, not style:
 - Keep the original detected value alongside any normalized value; store raw OCR/model text separately from structured JSON (`extraction_logs`).
 - Confidence at document **and** important-field level; warnings as an array.
 - Persist both `original_file_path` and `processed_file_path`; the original is never mutated.
-- Deterministic checks after extraction: total exists; date/supplier/invoice-number presence flagged; VAT reconciles when subtotal+VAT present; currency defaults `ZAR`; negative totals rejected unless credit note/refund; outlier totals flagged; duplicate risk computed before approval. Failures become plain-language warnings on the review screen.
+- Deterministic checks after extraction: total exists; date/supplier/invoice-number presence flagged; VAT reconciles when subtotal+VAT present; currency is stamped from the user's `default_currency` setting (overrides detection); negative totals rejected unless credit note/refund; outlier totals flagged; duplicate risk computed before approval. Failures become plain-language warnings on the review screen. The non-actionable *"VAT rate not clearly detected"* warning is filtered out post-extraction (`filterNoiseWarnings` in `validate.ts`) — SA VAT is a flat 15%, so an unclear rate is never actionable.
 
 ## Domain logic that's easy to get wrong
 
@@ -140,6 +152,8 @@ Correctness requirements, not style:
 PRD §11. Core tables: `suppliers` (+`parent_supplier_id`), `invoices`, `invoice_items`, `document_uploads`, `extraction_logs` (raw + extracted + validated JSON + provider/model + warnings), `extraction_fields` (per-field raw/normalized/confidence/correction audit), `duplicate_checks`, `audit_logs`, and `projects` (= "sites", a cost-centre dimension on `invoices.project_id`). Approved financial records are never silently deleted; manual corrections are audit-logged.
 
 **Multi-tenant:** every owned table carries `user_id uuid → auth.users` with RLS `user_id = auth.uid()` (migration `0006`); set `user_id` on **every** insert. The `invoice_status` enum still contains the retired `duplicate` and `not_invoice` values (Postgres can't drop enum values in place) — they're **inert**: don't reintroduce them. Live statuses are `processing / needs_review / approved / rejected / low_confidence`.
+
+**Per-user settings:** `user_settings` (migration `0007`; `user_id` PK, `default_currency`, RLS owner-scoped) holds preferences, created lazily — `getUserSettings()` falls back to app defaults when absent. It's the home for future per-user prefs (e.g. the deferred VAT default-rate). **Currency is a per-user default, not a per-invoice field:** the review screen no longer edits it; the extract pipeline stamps each new invoice with the user's `default_currency`, overriding model detection (existing invoices keep their recorded currency). **Payment status:** the pre-existing `payment_status` enum (`Paid/Unpaid/Unknown/COD/Account`) is now surfaced — a "Paid" checkbox in review (defaults checked; maps Paid/Unpaid) plus a Paid/Unpaid badge and an "Outstanding" register filter.
 
 ## Testing & extraction quality
 
