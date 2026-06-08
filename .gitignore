@@ -57,6 +57,10 @@ __pycache__/
 /WhatsApp*/
 /WhatsApp*.zip
 
+# feature-idea scratch — exploratory notes / sample data for possible features,
+# kept local (e.g. the bakery COS product, moved to projects/crumb/)
+/docs/feature-ideas/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
