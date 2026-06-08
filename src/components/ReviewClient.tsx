@@ -74,6 +74,12 @@ export function ReviewClient({
   const [corrected, setCorrected] = useState<Set<string>>(new Set());
   const [supplierId, setSupplierId] = useState<string | null>(invoice.supplier_id);
   const [projectId, setProjectId] = useState<string>(invoice.project_id ?? "");
+  // "Paid" flag → existing payment_status enum (Paid/Unpaid). Defaults checked:
+  // most invoices double as receipts and are already settled; reviewer unchecks
+  // for a terms invoice. A null/unknown status counts as paid by default.
+  const initialPaid =
+    invoice.payment_status == null ? true : invoice.payment_status === "Paid";
+  const [paid, setPaid] = useState(initialPaid);
   const [busy, setBusy] = useState<Action | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +87,8 @@ export function ReviewClient({
   const dirty =
     corrected.size > 0 ||
     supplierId !== invoice.supplier_id ||
-    projectId !== (invoice.project_id ?? "");
+    projectId !== (invoice.project_id ?? "") ||
+    paid !== initialPaid;
 
   function setField(key: string, value: string) {
     setValues((p) => ({ ...p, [key]: value }));
@@ -95,8 +102,9 @@ export function ReviewClient({
       if (f.type === "number") fields[f.key] = v === "" ? null : Number(v);
       else fields[f.key] = v === "" ? null : v;
     }
+    fields.payment_status = paid ? "Paid" : "Unpaid";
     return fields;
-  }, [values]);
+  }, [values, paid]);
 
   async function run(action: Action, extra: Record<string, unknown> = {}) {
     setBusy(action);
@@ -364,6 +372,27 @@ export function ReviewClient({
                   </div>
                 </div>
               ))}
+
+              {/* Paid flag → payment_status; most invoices are settled receipts */}
+              <div className="grid grid-cols-3 items-center gap-3">
+                <label htmlFor="paid-toggle" className="text-xs text-muted col-span-1">
+                  Paid
+                </label>
+                <div className="col-span-2">
+                  <label className="inline-flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      id="paid-toggle"
+                      type="checkbox"
+                      checked={paid}
+                      onChange={(e) => setPaid(e.target.checked)}
+                      className="h-4 w-4 rounded border-border text-primary focus:ring-2 focus:ring-primary/30"
+                    />
+                    <span className={paid ? "font-medium text-status-approved" : "text-muted"}>
+                      {paid ? "Paid" : "Unpaid"}
+                    </span>
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
 

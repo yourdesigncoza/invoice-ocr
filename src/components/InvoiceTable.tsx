@@ -1,4 +1,5 @@
 import { StatusBadge } from "@/components/StatusBadge";
+import { PaidBadge } from "@/components/PaidBadge";
 import { DuplicateBadge } from "@/components/DuplicateBadge";
 import { ConfidenceBadge } from "@/components/ConfidenceBadge";
 import { InvoiceModal } from "@/components/InvoiceModal";
@@ -34,6 +35,7 @@ export function InvoiceTable({
               {showProject && <Th>Site</Th>}
               <Th>Invoice No</Th>
               <Th>Type</Th>
+              <Th>Paid</Th>
               <Th className="text-right">Total</Th>
               <Th className="text-right">VAT</Th>
               <Th className="text-right">Confidence</Th>
@@ -61,6 +63,7 @@ export function InvoiceTable({
                 )}
                 <Td className="text-muted">{inv.invoice_number || "—"}</Td>
                 <Td className="text-muted whitespace-nowrap">{inv.document_type}</Td>
+                <Td><PaidBadge status={inv.payment_status} /></Td>
                 <Td className="text-right tabular-nums font-medium">
                   {formatMoney(inv.total_incl_vat, inv.currency_code)}
                 </Td>

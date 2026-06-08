@@ -8,7 +8,7 @@ import type {
   InvoiceItem,
   DuplicateCheck,
 } from "./types";
-import type { InvoiceStatus } from "./constants";
+import type { InvoiceStatus, PaymentStatus } from "./constants";
 import { formatVat } from "./utils";
 
 export { isSupabaseConfigured };
@@ -22,6 +22,7 @@ async function db() {
 
 export interface InvoiceFilters {
   status?: InvoiceStatus | InvoiceStatus[];
+  paymentStatus?: PaymentStatus;
   supplierId?: string;
   projectId?: string;
   from?: string;
@@ -48,6 +49,7 @@ export async function getInvoices(
     q = Array.isArray(filters.status)
       ? q.in("status", filters.status)
       : q.eq("status", filters.status);
+  if (filters.paymentStatus) q = q.eq("payment_status", filters.paymentStatus);
   if (filters.supplierId) q = q.eq("supplier_id", filters.supplierId);
   if (filters.projectId) q = q.eq("project_id", filters.projectId);
   if (filters.from) q = q.gte("invoice_date", filters.from);

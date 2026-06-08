@@ -19,6 +19,7 @@ const VIEWS: { key: string; label: string; filters: () => InvoiceFilters }[] = [
   { key: "all", label: "All Invoices", filters: () => ({}) },
   { key: "needs_review", label: "Needs Review", filters: () => ({ status: "needs_review" }) },
   { key: "approved", label: "Approved", filters: () => ({ status: "approved" }) },
+  { key: "outstanding", label: "Outstanding", filters: () => ({ paymentStatus: "Unpaid" }) },
   { key: "low_confidence", label: "Low Confidence", filters: () => ({ status: "low_confidence" }) },
   { key: "this_week", label: "This Week", filters: () => ({ ...rangeFor("this_week", new Date()) }) },
   { key: "this_month", label: "This Month", filters: () => ({ ...rangeFor("this_month", new Date()) }) },
