@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Offline — SpendSilo</title>
+    <link rel="icon" href="/icons/icon-192.png" />
+    <style>
+      :root { color-scheme: light; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background: #f8fafc;
+        color: #0f172a;
+      }
+      .card {
+        width: 100%;
+        max-width: 22rem;
+        text-align: center;
+      }
+      img { width: 64px; height: 64px; border-radius: 14px; }
+      h1 { font-size: 1.125rem; margin: 1rem 0 0.5rem; }
+      p { margin: 0 0 1.25rem; font-size: 0.875rem; color: #64748b; line-height: 1.5; }
+      button {
+        appearance: none;
+        border: 0;
+        cursor: pointer;
+        background: #2563eb;
+        color: #fff;
+        font-weight: 600;
+        font-size: 0.875rem;
+        padding: 0.625rem 1.25rem;
+        border-radius: 0.625rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <img src="/icons/icon-192.png" alt="SpendSilo" />
+      <h1>You're offline</h1>
+      <p>
+        SpendSilo needs a connection to extract and review invoices. Reconnect
+        and try again.
+      </p>
+      <button onclick="location.reload()">Retry</button>
+    </div>
+  </body>
+</html>

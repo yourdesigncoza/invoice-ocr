@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -33,6 +34,7 @@ export default function RootLayout({
       {/* extensions (e.g. ColorZilla's cz-shortcut-listen) inject attributes on
           body before hydration; suppress that benign attribute mismatch only here */}
       <body className="min-h-full" suppressHydrationWarning>
+        <ServiceWorkerRegister />
         {children}
       </body>
     </html>

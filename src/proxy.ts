@@ -66,6 +66,7 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     // everything except API (self-gated), Next internals, and static assets
-    "/((?!api|_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|manifest.webmanifest|.*\\.png$).*)",
+    // (incl. the PWA service worker + offline shell, which must be public).
+    "/((?!api|_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|manifest.webmanifest|sw\\.js|offline\\.html|.*\\.png$).*)",
   ],
 };

@@ -21,6 +21,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Image from "next/image";
+import InstallPrompt from "@/components/InstallPrompt";
 import { NAV } from "@/lib/constants";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -184,6 +185,11 @@ export function Sidebar({ email, isAdmin }: { email: string; isAdmin?: boolean }
             <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
               <NavLinks onNavigate={() => setOpen(false)} isAdmin={isAdmin} />
             </nav>
+            {/* Add-to-home-screen lives only in the mobile drawer (this whole
+                block is md:hidden), so the install option is phone-only. */}
+            <div className="px-3 pb-1">
+              <InstallPrompt />
+            </div>
             <AccountFooter email={email} onSignOut={signOut} />
           </aside>
         </div>
