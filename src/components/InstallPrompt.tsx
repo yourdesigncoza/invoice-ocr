@@ -49,22 +49,22 @@ export default function InstallPrompt() {
   return (
     <>
       <div className="md:hidden fixed inset-x-0 bottom-0 z-40 px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <div className="mx-auto flex max-w-md items-center gap-3 rounded-xl border border-border bg-surface px-3.5 py-2.5 shadow-lg">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <div className="mx-auto flex max-w-md items-center gap-3 rounded-xl border border-white/10 bg-sidebar px-3.5 py-2.5 shadow-lg">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 text-brand-yellow">
             <Smartphone className="h-5 w-5" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium leading-tight text-foreground">
+            <p className="text-sm font-medium leading-tight text-white">
               Install SpendSilo
             </p>
-            <p className="text-xs leading-tight text-muted">
+            <p className="text-xs leading-tight text-slate-400">
               Add it to your home screen for one-tap access
             </p>
           </div>
           <button
             type="button"
             onClick={onClick}
-            className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+            className="shrink-0 rounded-lg bg-brand-yellow px-3 py-1.5 text-sm font-semibold text-sidebar hover:bg-brand-yellow/90"
           >
             Add
           </button>
@@ -72,7 +72,7 @@ export default function InstallPrompt() {
             type="button"
             onClick={() => setDismissed(true)}
             aria-label="Dismiss"
-            className="shrink-0 -mr-1 p-1 text-muted hover:text-foreground"
+            className="shrink-0 -mr-1 p-1 text-slate-400 hover:text-white"
           >
             <X className="h-4 w-4" />
           </button>
