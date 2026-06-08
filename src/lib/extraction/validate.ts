@@ -79,3 +79,21 @@ export function validateExtraction(ex: Extraction): ValidationResult {
 
   return { warnings, hardFail };
 }
+
+/**
+ * Warnings that are pure noise in the South African context — they fire on
+ * almost every receipt and only train reviewers to ignore the warning list.
+ * SA VAT is a flat 15%, so any warning about the VAT *rate* being unclear or
+ * undetermined is never actionable. The model emits these from line-item
+ * inspection (`ex.warnings`), with varying wording — so we match on the token
+ * "VAT rate" itself. Genuine VAT signals never mention the rate (they speak of
+ * the VAT *amount*, *number*, or a failed reconciliation) and so survive.
+ */
+const NOISE_WARNING_PATTERNS: RegExp[] = [/vat\s*rate/i];
+
+/** Strip non-actionable noise warnings; see {@link NOISE_WARNING_PATTERNS}. */
+export function filterNoiseWarnings(warnings: string[]): string[] {
+  return warnings.filter(
+    (w) => !NOISE_WARNING_PATTERNS.some((p) => p.test(w)),
+  );
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateExtraction } from "@/lib/extraction/validate";
+import { validateExtraction, filterNoiseWarnings } from "@/lib/extraction/validate";
 import { extraction } from "./_factories";
 
 describe("validateExtraction (PRD §7.3.2 business rules)", () => {
@@ -46,6 +46,24 @@ describe("validateExtraction (PRD §7.3.2 business rules)", () => {
     const r = validateExtraction(extraction({ total: 100, vat: 15 }));
     expect(r.warnings).toContain("Supplier name not found");
     expect(r.warnings).toContain("Invoice date not found");
+  });
+
+  it("filterNoiseWarnings drops the unactionable VAT-rate noise (SA is flat 15%)", () => {
+    const kept = filterNoiseWarnings([
+      "VAT rate not clearly detected on line items",
+      "VAT rate could not be determined",
+    ]);
+    expect(kept).toEqual([]);
+  });
+
+  it("filterNoiseWarnings keeps genuine VAT signals", () => {
+    const signals = [
+      "VAT amount not clearly detected",
+      "VAT number missing on a tax invoice",
+      "VAT check failed: total does not equal subtotal + VAT — manual review required",
+      "Total amount not found",
+    ];
+    expect(filterNoiseWarnings(signals)).toEqual(signals);
   });
 
   it("does not hard-fail a clean receipt", () => {

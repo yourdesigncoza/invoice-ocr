@@ -1,6 +1,6 @@
 import type { ExtractionInput, ProviderId } from "./provider";
 import { OpenAIVisionProvider } from "./openai-vision";
-import { validateExtraction } from "./validate";
+import { validateExtraction, filterNoiseWarnings } from "./validate";
 import { scoreDocument, deriveStatus } from "./confidence";
 import type { Extraction } from "./schema";
 import { DEFAULT_CURRENCY, type InvoiceStatus } from "@/lib/constants";
@@ -70,7 +70,7 @@ export async function processInvoice(
   const ex = result.extraction;
 
   const { warnings: ruleWarnings, hardFail } = validateExtraction(ex);
-  const warnings = dedupe([...ex.warnings, ...ruleWarnings]);
+  const warnings = filterNoiseWarnings(dedupe([...ex.warnings, ...ruleWarnings]));
   const confidence = scoreDocument(ex);
   const status = deriveStatus(confidence, hardFail);
 
