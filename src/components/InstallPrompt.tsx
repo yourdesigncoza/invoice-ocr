@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Smartphone, Share, MoreVertical } from "lucide-react";
+import { Smartphone, Share, MoreVertical, X } from "lucide-react";
 import {
   initInstallCapture,
   getInstallState,
@@ -9,10 +9,11 @@ import {
   promptInstall,
 } from "@/lib/pwaInstall";
 
-// "Add to Home Screen" button for the mobile drawer. Always visible until the
-// app is installed. Reads the globally-captured install event (see
-// pwaInstall.ts) so a real one-tap install works even though this button mounts
-// after the event has already fired.
+// Persistent floating "Add to Home Screen" banner, pinned to the bottom on
+// mobile only (md:hidden). Mounted once from the app layout, so it survives
+// client-side navigation; the X hides it for the current load. Reads the
+// globally-captured install event (see pwaInstall.ts) so a real one-tap install
+// works even though this mounts after the event has already fired.
 //   - captured prompt available (Chromium) → fire the native install dialog;
 //   - iOS Safari → Share → Add to Home Screen steps;
 //   - otherwise → generic "use the browser menu" steps.
@@ -26,6 +27,7 @@ function detectIOS(): boolean {
 
 export default function InstallPrompt() {
   const [, force] = useState(0);
+  const [dismissed, setDismissed] = useState(false);
   const [help, setHelp] = useState<null | "ios" | "generic">(null);
 
   useEffect(() => {
@@ -34,7 +36,7 @@ export default function InstallPrompt() {
   }, []);
 
   const { canPrompt, installed } = getInstallState();
-  if (installed) return null;
+  if (installed || dismissed) return null;
 
   const onClick = async () => {
     if (canPrompt) {
@@ -46,14 +48,36 @@ export default function InstallPrompt() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={onClick}
-        className="flex w-full items-center gap-3 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10"
-      >
-        <Smartphone className="h-4 w-4 shrink-0" />
-        Add to Home Screen
-      </button>
+      <div className="md:hidden fixed inset-x-0 bottom-0 z-40 px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="mx-auto flex max-w-md items-center gap-3 rounded-xl border border-border bg-surface px-3.5 py-2.5 shadow-lg">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <Smartphone className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium leading-tight text-foreground">
+              Install SpendSilo
+            </p>
+            <p className="text-xs leading-tight text-muted">
+              Add it to your home screen for one-tap access
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClick}
+            className="shrink-0 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            Add
+          </button>
+          <button
+            type="button"
+            onClick={() => setDismissed(true)}
+            aria-label="Dismiss"
+            className="shrink-0 -mr-1 p-1 text-muted hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
 
       {help && (
         <div
