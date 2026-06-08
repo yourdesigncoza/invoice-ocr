@@ -344,7 +344,7 @@ export function ReviewClient({
             <div className="space-y-2">
               {FIELDS.map((f) => (
                 <div key={f.key} className="grid grid-cols-3 items-center gap-3">
-                  <label className="text-xs text-muted col-span-1">{f.label}</label>
+                  <label className="text-sm text-muted col-span-1">{f.label}</label>
                   <div className="col-span-2">
                     {f.type === "select" ? (
                       <select
@@ -374,7 +374,7 @@ export function ReviewClient({
 
               {/* Paid flag → payment_status; most invoices are settled receipts */}
               <div className="grid grid-cols-3 items-center gap-3">
-                <label htmlFor="paid-toggle" className="text-xs text-muted col-span-1">
+                <label htmlFor="paid-toggle" className="text-sm text-muted col-span-1">
                   Paid
                 </label>
                 <div className="col-span-2">
