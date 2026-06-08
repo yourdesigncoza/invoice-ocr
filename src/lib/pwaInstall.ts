@@ -34,6 +34,12 @@ export function initInstallCapture(): void {
   if (initialized || typeof window === "undefined") return;
   initialized = true;
   installed = detectInstalled();
+  // Detection is sync but happens inside an effect, after the first render has
+  // already read the (false) default. Notify subscribers so they re-read and
+  // hide the install UI when we're already running standalone — otherwise, in a
+  // standalone launch neither `beforeinstallprompt` nor `appinstalled` ever
+  // fires, so nothing else would wake them and the banner stays stuck.
+  if (installed) emit();
 
   window.addEventListener("beforeinstallprompt", (e: Event) => {
     e.preventDefault(); // suppress the mini-infobar; we drive our own button

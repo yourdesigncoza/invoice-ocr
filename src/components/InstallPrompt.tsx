@@ -31,8 +31,11 @@ export default function InstallPrompt() {
   const [help, setHelp] = useState<null | "ios" | "generic">(null);
 
   useEffect(() => {
+    // Subscribe BEFORE init so we receive the emit init fires when it detects
+    // we're already running standalone (see pwaInstall.initInstallCapture).
+    const unsubscribe = subscribe(() => force((n) => n + 1));
     initInstallCapture();
-    return subscribe(() => force((n) => n + 1));
+    return unsubscribe;
   }, []);
 
   const { canPrompt, installed } = getInstallState();
