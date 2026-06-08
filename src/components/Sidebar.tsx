@@ -14,6 +14,7 @@ import {
   Download,
   Settings,
   Receipt,
+  BookOpen,
   Menu,
   X,
   LogOut,
@@ -26,6 +27,7 @@ import { getBrowserSupabase } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 const ICONS: Record<string, LucideIcon> = {
+  BookOpen,
   LayoutDashboard,
   Upload,
   ClipboardCheck,

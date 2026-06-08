@@ -91,6 +91,7 @@ export const NAV = [
   { href: "/duplicates", label: "Duplicates", icon: "CopyCheck" },
   { href: "/reports", label: "Reports", icon: "FileBarChart" },
   { href: "/exports", label: "Exports", icon: "Download" },
+  { href: "/getting-started", label: "Getting Started", icon: "BookOpen" },
   { href: "/settings", label: "Settings", icon: "Settings" },
 ] as const;
 
