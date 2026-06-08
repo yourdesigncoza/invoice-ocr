@@ -48,7 +48,6 @@ const FIELDS = [
   { key: "vat_amount", label: "VAT", type: "number" },
   { key: "total_incl_vat", label: "Total (incl VAT)", type: "number" },
   { key: "payment_method", label: "Payment Method", type: "select", options: PAYMENT_METHODS },
-  { key: "currency_code", label: "Currency", type: "text" },
   { key: "vat_number", label: "VAT Number", type: "text" },
 ] as const;
 

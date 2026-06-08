@@ -43,6 +43,24 @@ export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
 export const DEFAULT_CURRENCY = "ZAR";
 
+// Currency is a per-user setting (Settings → Preferences), not a per-invoice
+// field. ZAR-first, then the currencies most relevant to the SA / broader
+// African + global market. Each new invoice is stamped with the user's choice.
+export const CURRENCIES = [
+  { code: "ZAR", label: "South African Rand (R)" },
+  { code: "USD", label: "US Dollar ($)" },
+  { code: "EUR", label: "Euro (€)" },
+  { code: "GBP", label: "British Pound (£)" },
+  { code: "NGN", label: "Nigerian Naira (₦)" },
+  { code: "KES", label: "Kenyan Shilling (KSh)" },
+  { code: "AUD", label: "Australian Dollar (A$)" },
+  { code: "CAD", label: "Canadian Dollar (C$)" },
+  { code: "AED", label: "UAE Dirham (د.إ)" },
+  { code: "INR", label: "Indian Rupee (₹)" },
+] as const;
+export type CurrencyCode = (typeof CURRENCIES)[number]["code"];
+export const CURRENCY_CODES = CURRENCIES.map((c) => c.code) as readonly string[];
+
 // PRD §12 confidence thresholds
 export const CONFIDENCE = {
   high: 0.9, // >= 0.90  → can be approved quickly

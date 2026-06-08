@@ -1,7 +1,8 @@
 import { requireUser } from "@/lib/auth-guards";
-import { getProjects, isSupabaseConfigured } from "@/lib/data";
+import { getProjects, getUserSettings, isSupabaseConfigured } from "@/lib/data";
 import { PageHeader, NotConfigured } from "@/components/ui";
 import { SitesManager } from "@/components/SitesManager";
+import { CurrencyCard } from "@/components/CurrencyCard";
 import { AccountCard } from "@/components/AccountCard";
 
 export const dynamic = "force-dynamic";
@@ -17,13 +18,16 @@ export default async function SettingsPage() {
     );
   }
 
-  const projects = await getProjects();
+  const [projects, settings] = await Promise.all([
+    getProjects(),
+    getUserSettings(),
+  ]);
 
   return (
     <>
       <PageHeader
         title="Settings"
-        subtitle="Manage your sites and account"
+        subtitle="Manage your sites, account and preferences"
       />
 
       <section className="mb-8">
@@ -36,9 +40,14 @@ export default async function SettingsPage() {
         <SitesManager projects={projects} />
       </section>
 
-      <section>
+      <section className="mb-8">
         <h2 className="mb-2 text-sm font-semibold text-foreground">Account</h2>
         <AccountCard email={user.email ?? ""} />
+      </section>
+
+      <section>
+        <h2 className="mb-2 text-sm font-semibold text-foreground">Preferences</h2>
+        <CurrencyCard current={settings.default_currency} />
       </section>
     </>
   );

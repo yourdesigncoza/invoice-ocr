@@ -6,6 +6,12 @@ import type {
   PaymentStatus,
 } from "./constants";
 
+export interface UserSettings {
+  user_id: string;
+  default_currency: string;
+  updated_at: string;
+}
+
 export interface Supplier {
   id: string;
   supplier_name: string;

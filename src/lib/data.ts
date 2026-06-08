@@ -7,8 +7,9 @@ import type {
   Project,
   InvoiceItem,
   DuplicateCheck,
+  UserSettings,
 } from "./types";
-import type { InvoiceStatus, PaymentStatus } from "./constants";
+import { DEFAULT_CURRENCY, type InvoiceStatus, type PaymentStatus } from "./constants";
 import { formatVat } from "./utils";
 
 export { isSupabaseConfigured };
@@ -203,6 +204,25 @@ export async function getActiveProjects(): Promise<Project[]> {
 /** The adaptive gate: project UI only surfaces once the user has ≥2 sites. */
 export async function projectsEnabled(): Promise<boolean> {
   return (await getActiveProjects()).length >= 2;
+}
+
+/**
+ * Current user's preferences (RLS-scoped). The row is created lazily on first
+ * save, so absence is normal — fall back to app defaults rather than erroring.
+ */
+export async function getUserSettings(): Promise<UserSettings> {
+  const supabase = await db();
+  const fallback: UserSettings = {
+    user_id: "",
+    default_currency: DEFAULT_CURRENCY,
+    updated_at: "",
+  };
+  if (!supabase) return fallback;
+  const { data } = await supabase
+    .from("user_settings")
+    .select("*")
+    .maybeSingle();
+  return (data as UserSettings) ?? fallback;
 }
 
 export async function getProject(id: string): Promise<Project | null> {

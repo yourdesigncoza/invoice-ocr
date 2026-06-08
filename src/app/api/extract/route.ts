@@ -4,7 +4,7 @@ import { getUser } from "@/lib/auth-guards";
 import { processInvoice } from "@/lib/extraction";
 import { preprocessImage } from "@/lib/extraction/preprocess";
 import { findDuplicates } from "@/lib/duplicates/detect";
-import { STORAGE_BUCKET } from "@/lib/constants";
+import { STORAGE_BUCKET, DEFAULT_CURRENCY } from "@/lib/constants";
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // background vision work continues after the response
@@ -155,11 +155,22 @@ async function processStored(supabase: Supabase, job: Job) {
       fileName,
     });
 
+    // Currency is a per-user setting, not detected per invoice. Stamp the
+    // user's chosen default, overriding whatever the model guessed. Admin
+    // client → scope the lookup by user_id explicitly.
+    const { data: settings } = await supabase
+      .from("user_settings")
+      .select("default_currency")
+      .eq("user_id", userId)
+      .maybeSingle();
+    const currencyCode = settings?.default_currency ?? DEFAULT_CURRENCY;
+
     // persist invoice
     const { data: invoice, error: invErr } = await supabase
       .from("invoices")
       .insert({
         ...processed.invoiceFields,
+        currency_code: currencyCode,
         original_file_path: objectPath,
         processed_file_path: processedPath,
         user_id: userId,
