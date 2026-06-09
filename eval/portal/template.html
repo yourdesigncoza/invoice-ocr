@@ -59,6 +59,8 @@
   #lock input{width:100%;padding:10px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#fff;font:inherit}
   #lock button{width:100%;margin-top:12px}
   #lock .err{color:#fca5a5;font-size:12px;margin-top:10px;min-height:16px}
+  /* id selector outranks the .hide class, so hide #lock explicitly */
+  #lock.hide{display:none}
 </style>
 </head>
 <body>
@@ -293,13 +295,20 @@ async function unlock(passcode){
 }
 function showLock(){
   const lock=document.getElementById('lock'); lock.classList.remove('hide');
+  const err=document.getElementById('lockErr');
+  const btn=document.getElementById('unlockBtn');
   const go=async()=>{
-    const err=document.getElementById('lockErr'); err.textContent='';
-    try{ const d=await unlock(document.getElementById('pw').value);
-      lock.classList.add('hide'); init(d);
-    }catch(_){ err.textContent='Wrong passcode — try again.'; }
+    if(!self.isSecureContext || !(self.crypto && crypto.subtle)){
+      err.textContent='This needs a secure (https) page to decrypt. Open the https:// link.'; return;
+    }
+    btn.disabled=true; err.style.color='#94a3b8'; err.textContent='Decrypting…';
+    let data;
+    try{ data=await unlock(document.getElementById('pw').value); }
+    catch(_){ err.style.color='#fca5a5'; err.textContent='Wrong passcode — try again.'; btn.disabled=false; return; }
+    try{ lock.classList.add('hide'); init(data); }              // decrypt OK — render failures shouldn't read as "wrong passcode"
+    catch(e){ lock.classList.remove('hide'); err.style.color='#fca5a5'; err.textContent='Decrypted, but failed to load: '+(e&&e.message||e); btn.disabled=false; }
   };
-  document.getElementById('unlockBtn').onclick=go;
+  btn.onclick=go;
   document.getElementById('pw').addEventListener('keydown',e=>{ if(e.key==='Enter')go(); });
 }
 
