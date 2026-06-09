@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SpendSilo — Extraction Verification</title>
+<style>
+  :root{--navy:#0F172A;--bg:#F8FAFC;--blue:#2563EB;--green:#16A34A;--red:#DC2626;
+        --amber:#F59E0B;--border:#e2e8f0;--muted:#64748b;}
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.45 Inter,system-ui,Arial,sans-serif;color:var(--navy);background:var(--bg)}
+  header{position:sticky;top:0;z-index:10;background:var(--navy);color:#fff;
+         display:flex;align-items:center;gap:16px;padding:10px 16px}
+  header h1{font-size:15px;margin:0;font-weight:700}
+  header .sp{flex:1}
+  header .stat{font-size:12px;color:#cbd5e1}
+  button{font:inherit;border:0;border-radius:8px;padding:7px 12px;cursor:pointer}
+  .btn-blue{background:var(--blue);color:#fff}
+  .btn-ghost{background:#1e293b;color:#fff}
+  .btn-sm{padding:4px 9px;font-size:12px;border-radius:6px}
+  .wrap{display:grid;grid-template-columns:1fr 1fr;gap:0;height:calc(100vh - 52px)}
+  .pane{overflow:auto;padding:16px}
+  .imgpane{background:#0b1220;display:flex;align-items:flex-start;justify-content:center}
+  .imgpane img{max-width:100%;border-radius:8px;cursor:zoom-in;background:#fff}
+  .navrow{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+  .navrow .id{font-weight:700;font-size:18px}
+  .orig{color:var(--muted);font-size:11px;word-break:break-all}
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:7px 8px;vertical-align:top;border-bottom:1px solid var(--border)}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+  .fld{font-weight:600;white-space:nowrap}
+  .cap{font-family:ui-monospace,Menlo,monospace;font-size:13px;word-break:break-word}
+  .cap.empty{color:#cbd5e1;font-style:italic}
+  .acts{display:flex;gap:5px;margin-top:5px}
+  .tog{border:1px solid var(--border);background:#fff;border-radius:6px;padding:3px 9px;font-size:12px}
+  .tog.ok.on{background:var(--green);color:#fff;border-color:var(--green)}
+  .tog.bad.on{background:var(--red);color:#fff;border-color:var(--red)}
+  input.fix,select.fix,textarea.note{width:100%;margin-top:6px;border:1px solid var(--border);
+        border-radius:6px;padding:5px 7px;font:inherit}
+  textarea.note{font-size:12px;color:#334155;resize:vertical;min-height:30px}
+  .hide{display:none}
+  .card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:14px}
+  .meta{font-size:12px;color:var(--muted);margin:2px 0 12px}
+  .warn{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:8px;
+        padding:8px;font-size:12px;margin-bottom:12px}
+  .items td{font-size:12px;padding:4px 6px}
+  .docnote{width:100%;border:1px solid var(--border);border-radius:8px;padding:8px;font:inherit;min-height:48px}
+  .pill{font-size:11px;padding:2px 7px;border-radius:99px;background:#e2e8f0;color:#334155}
+  .pill.done{background:#dcfce7;color:#166534}
+  .jump{width:64px;text-align:center}
+  dialog{border:0;border-radius:10px;padding:0;max-width:95vw}
+  dialog img{max-width:92vw;max-height:90vh;display:block}
+  /* lock screen */
+  #lock{position:fixed;inset:0;z-index:50;background:var(--navy);color:#fff;
+        display:flex;align-items:center;justify-content:center}
+  #lock .box{background:#0b1220;border:1px solid #1e293b;border-radius:14px;padding:28px;width:340px;max-width:92vw}
+  #lock h2{margin:0 0 4px;font-size:18px}
+  #lock p{margin:0 0 16px;color:#94a3b8;font-size:13px}
+  #lock input{width:100%;padding:10px;border-radius:8px;border:1px solid #334155;background:#0f172a;color:#fff;font:inherit}
+  #lock button{width:100%;margin-top:12px}
+  #lock .err{color:#fca5a5;font-size:12px;margin-top:10px;min-height:16px}
+</style>
+</head>
+<body>
+
+<div id="lock" class="hide">
+  <div class="box">
+    <h2>SpendSilo · Verification</h2>
+    <p>This bundle is encrypted. Enter the passcode you were given.</p>
+    <input id="pw" type="password" autocomplete="off" placeholder="Passcode" autofocus>
+    <button class="btn-blue" id="unlockBtn">Unlock</button>
+    <div class="err" id="lockErr"></div>
+  </div>
+</div>
+
+<header>
+  <h1>SpendSilo · Extraction Verification</h1>
+  <span class="stat" id="prog"></span>
+  <span class="sp"></span>
+  <span class="stat">model: <b id="model"></b></span>
+  <button class="btn-ghost btn-sm" id="importBtn">Import</button>
+  <button class="btn-blue btn-sm" id="exportBtn">Export verified JSON</button>
+</header>
+
+<div class="wrap">
+  <div class="pane imgpane"><img id="img" alt="receipt"></div>
+  <div class="pane">
+    <div class="navrow">
+      <button class="btn-ghost btn-sm" id="prev">‹ Prev</button>
+      <span class="id" id="rid"></span>
+      <span class="pill" id="donepill"></span>
+      <button class="btn-ghost btn-sm" id="next">Next ›</button>
+      <span class="sp"></span>
+      <label class="stat" style="color:#475569">Jump
+        <input class="jump btn-sm" id="jump" type="number" min="1"></label>
+    </div>
+    <div class="orig" id="orig"></div>
+    <div class="meta" id="meta"></div>
+    <div id="warns"></div>
+
+    <div class="card">
+      <table>
+        <thead><tr><th style="width:34%">Field</th><th>Captured (OCR) → confirm or fix</th></tr></thead>
+        <tbody id="fields"></tbody>
+      </table>
+    </div>
+
+    <div class="card" id="itemsCard">
+      <th style="display:block;margin-bottom:6px">Line items (read-only)</th>
+      <table class="items"><tbody id="items"></tbody></table>
+    </div>
+
+    <div class="card">
+      <th style="display:block;margin-bottom:6px">Overall comment for this receipt</th>
+      <textarea class="docnote" id="docnote" placeholder="Anything else off? legibility, wrong doc, missing field…"></textarea>
+      <div style="margin-top:10px">
+        <button class="btn-blue" id="markdone">Mark this receipt verified ✓</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<dialog id="zoom"><img id="zoomimg"></dialog>
+<input type="file" id="importFile" accept="application/json" class="hide">
+
+<script>
+const FIELDS = [
+  {key:'supplier',label:'Supplier',type:'text'},
+  {key:'invoice_date',label:'Invoice date',type:'text',ph:'YYYY-MM-DD or blank'},
+  {key:'document_type',label:'Document type',type:'select'},
+  {key:'total_incl_vat',label:'Total (incl VAT)',type:'number'},
+  {key:'vat_amount',label:'VAT amount',type:'number'},
+  {key:'invoice_number',label:'Invoice / slip no',type:'text'},
+  {key:'vat_number',label:'VAT number',type:'text'},
+];
+const LSKEY = 'spendsilo-verify-v1';
+let DATA = null, idx = 0, state = load();
+
+function load(){ try{return JSON.parse(localStorage.getItem(LSKEY))||{}}catch(e){return {}} }
+function save(){ try{localStorage.setItem(LSKEY,JSON.stringify(state))}catch(e){} }
+function recState(num){ state[num] = state[num] || {fields:{}, docNote:'', done:false}; return state[num]; }
+function fmt(v){ return (v===null||v===undefined||v==='')?'—':String(v); }
+function isEmpty(v){ return v===null||v===undefined||v===''; }
+
+function render(){
+  const rec = DATA.records[idx];
+  const st = recState(rec.num);
+  document.getElementById('rid').textContent = rec.num + ' / ' + String(DATA.records.length).padStart(3,'0');
+  document.getElementById('orig').textContent = rec.original;
+  document.getElementById('img').src = rec.img || ('images/' + rec.file);
+  document.getElementById('jump').value = parseInt(rec.num,10);
+  const cap = rec.captured;
+
+  let meta = [];
+  if(!rec.ok){ meta.push('⚠ OCR failed: '+(rec.error||'')); }
+  else { if(cap.confidence!=null) meta.push('confidence '+Math.round(cap.confidence*100)+'%');
+         if(cap.subtotal_excl_vat!=null) meta.push('subtotal '+cap.subtotal_excl_vat); }
+  document.getElementById('meta').textContent = meta.join('  ·  ');
+
+  const w = (rec.ok && cap.warnings && cap.warnings.length)
+    ? '<div class="warn"><b>OCR warnings:</b> '+cap.warnings.map(x=>String(x).replace(/[<&]/g,c=>c==='<'?'&lt;':'&amp;')).join(' · ')+'</div>' : '';
+  document.getElementById('warns').innerHTML = w;
+
+  const tb = document.getElementById('fields'); tb.innerHTML='';
+  FIELDS.forEach(f=>{
+    const capv = rec.ok ? cap[f.key] : null;
+    const fs = st.fields[f.key] || {status:null, fix:'', note:''};
+    const tr = document.createElement('tr');
+    const td1 = document.createElement('td'); td1.className='fld'; td1.textContent=f.label; tr.appendChild(td1);
+    const td2 = document.createElement('td');
+    const capDiv = document.createElement('div');
+    capDiv.className='cap'+(isEmpty(capv)?' empty':''); capDiv.textContent=fmt(capv);
+    td2.appendChild(capDiv);
+    const acts = document.createElement('div'); acts.className='acts';
+    const ok = document.createElement('button'); ok.className='tog ok'+(fs.status==='ok'?' on':''); ok.textContent='✓ correct';
+    const bad= document.createElement('button'); bad.className='tog bad'+(fs.status==='wrong'?' on':''); bad.textContent='✗ wrong';
+    acts.appendChild(ok); acts.appendChild(bad); td2.appendChild(acts);
+    let fix;
+    if(f.type==='select'){
+      fix=document.createElement('select'); fix.className='fix';
+      ['', ...DATA.docTypes].forEach(o=>{const op=document.createElement('option');op.value=o;op.textContent=o||'(blank)';fix.appendChild(op);});
+    } else {
+      fix=document.createElement('input'); fix.className='fix'; fix.type='text';
+      if(f.ph) fix.placeholder=f.ph;
+    }
+    fix.value = fs.fix!==''? fs.fix : (fmt(capv)==='—'?'':fmt(capv));
+    if(fs.status!=='wrong') fix.classList.add('hide');
+    const note=document.createElement('textarea'); note.className='note'; note.placeholder='note (optional)'; note.value=fs.note||'';
+
+    ok.onclick=()=>{ fs.status = fs.status==='ok'?null:'ok'; st.fields[f.key]=fs; save(); render(); };
+    bad.onclick=()=>{ fs.status = fs.status==='wrong'?null:'wrong'; st.fields[f.key]=fs; save(); render(); };
+    fix.oninput=()=>{ fs.fix=fix.value; st.fields[f.key]=fs; save(); };
+    note.oninput=()=>{ fs.note=note.value; st.fields[f.key]=fs; save(); };
+    td2.appendChild(fix); td2.appendChild(note);
+    tr.appendChild(td2); tb.appendChild(tr);
+  });
+
+  const it = document.getElementById('items'); it.innerHTML='';
+  const items = (rec.ok && cap.line_items)||[];
+  document.getElementById('itemsCard').style.display = items.length? '':'none';
+  items.forEach(li=>{
+    const tr=document.createElement('tr');
+    [li.description, li.quantity, li.unit_price, li.line_total].forEach(v=>{
+      const td=document.createElement('td'); td.textContent=fmt(v); tr.appendChild(td);
+    });
+    it.appendChild(tr);
+  });
+
+  document.getElementById('docnote').value = st.docNote||'';
+  updateDonePill(st);
+  updateProgress();
+}
+
+function updateDonePill(st){
+  const p=document.getElementById('donepill');
+  p.textContent = st.done?'verified':'unverified';
+  p.className = 'pill'+(st.done?' done':'');
+}
+function updateProgress(){
+  const done = DATA.records.filter(r=>(state[r.num]||{}).done).length;
+  document.getElementById('prog').textContent = done+' / '+DATA.records.length+' verified';
+}
+
+function coerce(key,val){
+  if(val==='' || val===null || val===undefined) return null;
+  if(key==='total_incl_vat'||key==='vat_amount'){ const n=parseFloat(String(val).replace(/[^0-9.\-]/g,'')); return isNaN(n)?null:n; }
+  return String(val);
+}
+
+function bind(){
+  document.getElementById('model').textContent = DATA.model;
+  document.getElementById('jump').max = DATA.records.length;
+  document.getElementById('docnote').oninput = e=>{ recState(DATA.records[idx].num).docNote=e.target.value; save(); };
+  document.getElementById('markdone').onclick = ()=>{ const st=recState(DATA.records[idx].num); st.done=!st.done; save(); if(st.done&&idx<DATA.records.length-1){idx++;} render(); };
+  document.getElementById('prev').onclick=()=>{ if(idx>0){idx--;render();} };
+  document.getElementById('next').onclick=()=>{ if(idx<DATA.records.length-1){idx++;render();} };
+  document.getElementById('jump').onchange=e=>{ const n=parseInt(e.target.value,10); if(n>=1&&n<=DATA.records.length){idx=n-1;render();} };
+  document.addEventListener('keydown',e=>{ if(['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName))return;
+    if(e.key==='ArrowLeft')document.getElementById('prev').click();
+    if(e.key==='ArrowRight')document.getElementById('next').click(); });
+  document.getElementById('img').onclick=()=>{ document.getElementById('zoomimg').src=document.getElementById('img').src; document.getElementById('zoom').showModal(); };
+  document.getElementById('zoom').onclick=()=>document.getElementById('zoom').close();
+
+  document.getElementById('exportBtn').onclick=()=>{
+    const out=DATA.records.map(rec=>{
+      const st=state[rec.num]||{fields:{},docNote:'',done:false};
+      const cap=rec.captured||{};
+      const row={image:rec.original, portal_num:rec.num, verified:!!st.done};
+      const notes=[];
+      FIELDS.forEach(f=>{
+        const fs=st.fields[f.key]||{};
+        let val = (fs.status==='wrong') ? coerce(f.key, fs.fix) : coerce(f.key, cap[f.key]);
+        row[f.key]=val;
+        if(fs.status==='wrong') notes.push(f.key+': OCR said "'+fmt(cap[f.key])+'" → corrected "'+fmt(val)+'"');
+        if(fs.note) notes.push(f.key+': '+fs.note);
+      });
+      row._field_status={}; FIELDS.forEach(f=>row._field_status[f.key]=(st.fields[f.key]||{}).status||'untouched');
+      if(st.docNote) notes.push('NOTE: '+st.docNote);
+      row.notes=notes.join(' | ');
+      return row;
+    });
+    const blob=new Blob([JSON.stringify({model:DATA.model, exported_at:new Date().toISOString(), labels:out},null,2)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='verified-labels.json'; a.click();
+  };
+  document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();
+  document.getElementById('importFile').onchange=e=>{
+    const fr=new FileReader();
+    fr.onload=()=>{ try{
+      const j=JSON.parse(fr.result); const labels=j.labels||j;
+      labels.forEach(row=>{ const rec=DATA.records.find(r=>r.original===row.image||r.num===row.portal_num); if(!rec)return;
+        const st=recState(rec.num); st.done=!!row.verified;
+        FIELDS.forEach(f=>{ const status=(row._field_status||{})[f.key];
+          if(status&&status!=='untouched'){ st.fields[f.key]={status:status, fix:(status==='wrong'?String(row[f.key]??''):''), note:''}; } });
+      });
+      save(); render(); alert('Imported '+labels.length+' rows.');
+    }catch(err){ alert('Could not parse: '+err); } };
+    fr.readAsText(e.target.files[0]);
+  };
+}
+
+function init(d){ DATA = d; bind(); render(); }
+
+// ---- encrypted-bundle unlock (deploy builds set window.__ENC__) ----
+async function unlock(passcode){
+  const e = window.__ENC__;
+  const b = s => Uint8Array.from(atob(s), c=>c.charCodeAt(0));
+  const salt=b(e.salt), iv=b(e.iv), ct=b(e.ct);
+  const baseKey = await crypto.subtle.importKey('raw', new TextEncoder().encode(passcode), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey({name:'PBKDF2', salt, iterations:e.iter, hash:'SHA-256'},
+              baseKey, {name:'AES-GCM', length:256}, false, ['decrypt']);
+  const pt = await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, ct);
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+function showLock(){
+  const lock=document.getElementById('lock'); lock.classList.remove('hide');
+  const go=async()=>{
+    const err=document.getElementById('lockErr'); err.textContent='';
+    try{ const d=await unlock(document.getElementById('pw').value);
+      lock.classList.add('hide'); init(d);
+    }catch(_){ err.textContent='Wrong passcode — try again.'; }
+  };
+  document.getElementById('unlockBtn').onclick=go;
+  document.getElementById('pw').addEventListener('keydown',e=>{ if(e.key==='Enter')go(); });
+}
+
+/*__BOOTSTRAP__*/
+</script>
+</body>
+</html>

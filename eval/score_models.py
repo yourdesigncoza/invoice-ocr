@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from compare_models import load_key, extract, flatten  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-IMAGES_DIR = os.path.join(ROOT, "WhatsApp Unknown 2026-06-07 at 13.08.09")
+IMAGES_DIR = os.path.join(ROOT, "demo-receipts")
 
 # label field -> flattened model field (compare_models.flatten keys)
 FIELD_MAP = {

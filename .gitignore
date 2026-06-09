@@ -48,6 +48,15 @@ yarn-error.log*
 __pycache__/
 *.pyc
 
+# verification portal — generated artifacts contain real client receipts.
+# Tracked: build.py, seal.mjs, template.html, README.md (code only).
+/eval/portal/images/
+/eval/portal/captured.json
+/eval/portal/manifest.json
+/eval/portal/index.html
+/eval/portal/index-deploy.html
+/eval/portal/*verified-labels*.json
+
 # exported CSVs (real invoice data) + editor lock files
 /*.csv
 .~lock.*#
@@ -56,6 +65,7 @@ __pycache__/
 # Drop a hand-picked, de-identified subset into tests/sample_invoices/ instead.
 /WhatsApp*/
 /WhatsApp*.zip
+/demo-receipts/
 
 # feature-idea scratch — exploratory notes / sample data for possible features,
 # kept local (e.g. the bakery COS product, moved to projects/crumb/)

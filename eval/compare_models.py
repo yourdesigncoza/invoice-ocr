@@ -120,27 +120,35 @@ def preprocess_b64(img_path):
         return base64.b64encode(open(img_path, "rb").read()).decode()
 
 
-def extract(api_key, model, img_path):
+def extract(api_key, model, img_path, _drop_temperature=False):
     data = preprocess_b64(img_path)
-    payload = {"model": model, "temperature": 0,
+    payload = {"model": model,
                "response_format": {"type": "json_schema", "json_schema": SCHEMA},
                "messages": [{"role": "system", "content": SYSTEM_PROMPT},
                             {"role": "user", "content": [
                                 {"type": "text", "text": USER_PROMPT},
                                 {"type": "image_url", "image_url": {
                                     "url": f"data:image/jpeg;base64,{data}", "detail": "high"}}]}]}
+    # temperature 0 for determinism; reasoning models (gpt-5.x) only allow the
+    # default (1) and 400 on temperature=0 — retry without it so they evaluate
+    # on equal footing instead of scoring a false zero.
+    if not _drop_temperature:
+        payload["temperature"] = 0
     body = json.dumps(payload).encode()
     req = urllib.request.Request("https://api.openai.com/v1/chat/completions", data=body,
                                  method="POST", headers={"Authorization": "Bearer " + api_key,
                                                          "Content-Type": "application/json"})
     t0 = time.time()
     try:
-        r = json.load(urllib.request.urlopen(req, timeout=120))
+        r = json.load(urllib.request.urlopen(req, timeout=180))
         ms = int((time.time() - t0) * 1000)
         ex = json.loads(r["choices"][0]["message"]["content"])
         return {"ok": True, "ms": ms, "resolved": r.get("model"), "data": ex}
     except urllib.error.HTTPError as e:
-        return {"ok": False, "ms": int((time.time() - t0) * 1000), "error": f"{e.code} {e.read().decode()[:160]}"}
+        msg = e.read().decode()
+        if not _drop_temperature and e.code == 400 and "temperature" in msg:
+            return extract(api_key, model, img_path, _drop_temperature=True)
+        return {"ok": False, "ms": int((time.time() - t0) * 1000), "error": f"{e.code} {msg[:160]}"}
     except Exception as e:
         return {"ok": False, "ms": int((time.time() - t0) * 1000), "error": str(e)[:160]}
 
@@ -181,7 +189,7 @@ def norm(v):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--images", default="WhatsApp Unknown*/*.jpeg")
+    ap.add_argument("--images", default="demo-receipts/*.jpeg")
     ap.add_argument("--models", default="gpt-4o,gpt-5.4-mini")
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--workers", type=int, default=6)
