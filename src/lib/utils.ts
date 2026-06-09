@@ -52,6 +52,13 @@ export function formatDate(iso: string | null | undefined): string {
   });
 }
 
+export function formatBytes(bytes: number | null | undefined): string {
+  if (!bytes || bytes <= 0) return "0 KB";
+  const mb = bytes / 1_048_576;
+  if (mb >= 1) return `${mb.toFixed(mb >= 10 ? 0 : 1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
 export function formatPct(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return "—";
   return `${Math.round(value * 100)}%`;

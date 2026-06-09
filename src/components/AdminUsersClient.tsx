@@ -4,7 +4,16 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { KeyRound, Trash2, Loader2, X } from "lucide-react";
 import { Card } from "@/components/ui";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatBytes } from "@/lib/utils";
+
+/** Shape returned by the admin_user_stats() RPC (aggregate metadata only). */
+export interface AdminUserStats {
+  user_id: string;
+  invoice_count: number;
+  extraction_count: number;
+  storage_bytes: number;
+  last_activity: string | null;
+}
 
 export interface AdminUser {
   id: string;
@@ -12,6 +21,10 @@ export interface AdminUser {
   created_at: string;
   last_sign_in_at: string | null;
   confirmed: boolean;
+  invoiceCount: number;
+  extractionCount: number;
+  storageBytes: number;
+  lastActivity: string | null;
 }
 
 const PAGE_SIZE = 20;
@@ -99,6 +112,14 @@ export function AdminUsersClient({
                 <th>Email</th>
                 <th>Registered</th>
                 <th>Last sign-in</th>
+                <th title="Most recent upload or invoice — distinct from last sign-in">
+                  Last activity
+                </th>
+                <th title="Invoices owned by this user">Invoices</th>
+                <th title="OpenAI extraction runs — usage / cost signal">
+                  Extractions
+                </th>
+                <th title="Total size of uploaded files">Storage</th>
                 <th></th>
               </tr>
             </thead>
@@ -123,6 +144,18 @@ export function AdminUsersClient({
                   </td>
                   <td className="px-3.5 py-2 text-muted whitespace-nowrap">
                     {u.last_sign_in_at ? formatDate(u.last_sign_in_at) : "—"}
+                  </td>
+                  <td className="px-3.5 py-2 text-muted whitespace-nowrap">
+                    {u.lastActivity ? formatDate(u.lastActivity) : "—"}
+                  </td>
+                  <td className="px-3.5 py-2 tabular-nums text-foreground/80">
+                    {u.invoiceCount}
+                  </td>
+                  <td className="px-3.5 py-2 tabular-nums text-foreground/80">
+                    {u.extractionCount}
+                  </td>
+                  <td className="px-3.5 py-2 tabular-nums text-muted whitespace-nowrap">
+                    {formatBytes(u.storageBytes)}
                   </td>
                   <td className="px-3.5 py-2">
                     <div className="flex items-center justify-end gap-1.5">
