@@ -2,6 +2,11 @@
 //
 //   node eval/portal/seal.mjs --passcode "your-passphrase" [--model gpt-4o]
 //
+// Passcode resolution (first hit wins): --passcode flag → PORTAL_PASSCODE in the
+// shell env → PORTAL_PASSCODE in the project's .env.local → a random one is
+// generated and printed. Set PORTAL_PASSCODE in .env.local for reproducible
+// re-seals without exporting it in every shell.
+//
 // Reads captured.json + manifest.json + images/ (produced by build.py), bundles
 // EVERYTHING — the OCR data AND the receipt images (base64) — into one JSON
 // payload, AES-256-GCM encrypts it with a key derived from your passcode
@@ -29,7 +34,20 @@ function arg(name, def) {
 }
 const MIME = { ".jpeg": "image/jpeg", ".jpg": "image/jpeg", ".png": "image/png" };
 
-let passcode = arg("passcode", process.env.PORTAL_PASSCODE || "");
+// Read a single key from the project's .env.local (../../ from this dir), where
+// the app keeps its other secrets. No dependency — a tiny KEY=VALUE parse.
+function envLocal(key) {
+  try {
+    const txt = readFileSync(join(HERE, "..", "..", ".env.local"), "utf8");
+    for (const line of txt.split(/\r?\n/)) {
+      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)$/);
+      if (m && m[1] === key) return m[2].trim().replace(/^["']|["']$/g, "");
+    }
+  } catch { /* no .env.local — fall through to generated */ }
+  return "";
+}
+
+let passcode = arg("passcode", process.env.PORTAL_PASSCODE || envLocal("PORTAL_PASSCODE") || "");
 let generated = false;
 if (!passcode) {
   // readable-ish strong passphrase: 4 random 4-char chunks
