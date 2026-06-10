@@ -229,6 +229,15 @@ function coerce(key,val){
   return String(val);
 }
 
+// Reviewer's correct/wrong judgment for one field. An explicit ✓/✗ click wins.
+// Otherwise a field on a *verified* receipt is an implicit 'correct' — marking
+// the receipt verified affirms everything not flagged — and 'unreviewed' until then.
+function verdictOf(fs, done){
+  if(fs.status==='wrong') return 'wrong';
+  if(fs.status==='ok')    return 'correct';
+  return done ? 'correct' : 'unreviewed';
+}
+
 function bind(){
   document.getElementById('model').textContent = DATA.model;
   document.getElementById('jump').max = DATA.records.length;
@@ -249,10 +258,14 @@ function bind(){
       const cap=rec.captured||{};
       const row={image:rec.original, portal_num:rec.num, verified:!!st.done};
       const notes=[];
+      row.verdicts={};   // human correct/wrong/unreviewed judgment per field
+      row.ocr={};        // what the OCR captured, so a verdict reads standalone
       FIELDS.forEach(f=>{
         const fs=st.fields[f.key]||{};
         let val = (fs.status==='wrong') ? coerce(f.key, fs.fix) : coerce(f.key, cap[f.key]);
         row[f.key]=val;
+        row.verdicts[f.key]=verdictOf(fs, !!st.done);
+        row.ocr[f.key]=coerce(f.key, cap[f.key]);
         if(fs.status==='wrong') notes.push(f.key+': OCR said "'+fmt(cap[f.key])+'" → corrected "'+fmt(val)+'"');
         if(fs.note) notes.push(f.key+': '+fs.note);
       });
@@ -271,7 +284,9 @@ function bind(){
       const j=JSON.parse(fr.result); const labels=j.labels||j;
       labels.forEach(row=>{ const rec=DATA.records.find(r=>r.original===row.image||r.num===row.portal_num); if(!rec)return;
         const st=recState(rec.num); st.done=!!row.verified;
-        FIELDS.forEach(f=>{ const status=(row._field_status||{})[f.key];
+        FIELDS.forEach(f=>{ let status=(row._field_status||{})[f.key];
+          if(!status||status==='untouched'){ const v=(row.verdicts||{})[f.key];   // new-style export
+            status = v==='wrong'?'wrong':(v==='correct'?'ok':'untouched'); }
           if(status&&status!=='untouched'){ st.fields[f.key]={status:status, fix:(status==='wrong'?String(row[f.key]??''):''), note:''}; } });
       });
       save(); render(); alert('Imported '+labels.length+' rows.');

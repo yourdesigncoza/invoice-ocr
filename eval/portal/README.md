@@ -27,6 +27,18 @@ number.
    `eval/score_models.py` for real, human-grounded accuracy numbers.
    **Import** reloads a previous export to resume.
 
+   Each exported row records the reviewer's per-field judgment, not just the
+   resolved value:
+   - `verdicts` — `{field: "correct" | "wrong" | "unreviewed"}`. An explicit
+     ✓/✗ click wins; an untouched field on a **verified** receipt is an implicit
+     `correct` (marking the receipt verified affirms everything not flagged);
+     anything on an unverified receipt stays `unreviewed`.
+   - `ocr` — `{field: capturedValue}`, so a verdict reads standalone (a
+     `correct` verdict + the OCR value = the confirmed value; a `wrong` verdict
+     pairs with the corrected value in the top-level field).
+   - `_field_status` — raw `ok`/`wrong`/`untouched` per field (round-trips on
+     Import; `verdicts` is the carrier to fold into `labels.json`).
+
 ## Deploy online (encrypted, passcode-gated)
 
 For a remote reviewer. `seal.mjs` bundles data + images into one AES-256-GCM
