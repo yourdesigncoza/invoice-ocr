@@ -42,20 +42,22 @@ yarn-error.log*
 /*.png
 
 # model-eval output + gold labels — contain data from real client receipts
-/eval/results.json
-/eval/results/
-/eval/labels.json
+# /eval/results.json
+# /eval/results/
+# /eval/labels.json
 __pycache__/
 *.pyc
 
 # verification portal — generated artifacts contain real client receipts.
 # Tracked: build.py, seal.mjs, template.html, README.md (code only).
-/eval/portal/images/
-/eval/portal/captured.json
-/eval/portal/manifest.json
-/eval/portal/index.html
-/eval/portal/index-deploy.html
-/eval/portal/*verified-labels*.json
+# /eval/portal/images/
+# /eval/portal/captured.json
+# /eval/portal/manifest.json
+# /eval/portal/index.html
+# /eval/portal/index-deploy.html
+# /eval/portal/*verified-labels*.json
+
+/eval*
 
 # exported CSVs (real invoice data) + editor lock files
 /*.csv
