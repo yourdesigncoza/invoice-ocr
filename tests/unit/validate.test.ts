@@ -80,4 +80,29 @@ describe("validateExtraction (PRD §7.3.2 business rules)", () => {
     );
     expect(r.hardFail).toBe(false);
   });
+
+  describe("currency-gated SA VAT-number lint (E4)", () => {
+    const withVat = (vat_number: string | null) =>
+      extraction({
+        supplier: { raw_name: "SPAR", vat_number },
+        invoice_date: "2026-05-27",
+        total: 100,
+      });
+
+    it("warns on a malformed SA VAT number when the tenant is ZAR", () => {
+      const r = validateExtraction(withVat("1234567890"), { defaultCurrency: "ZAR" });
+      expect(r.warnings.join(" ")).toMatch(/vat number format looks unusual/i);
+      expect(r.hardFail).toBe(false); // soft lint only
+    });
+
+    it("accepts a well-formed SA VAT number (10 digits, leading 4)", () => {
+      const r = validateExtraction(withVat("4260266616"), { defaultCurrency: "ZAR" });
+      expect(r.warnings.join(" ")).not.toMatch(/format looks unusual/i);
+    });
+
+    it("ignores VAT-number shape for non-ZAR tenants", () => {
+      const r = validateExtraction(withVat("1234567890"), { defaultCurrency: "USD" });
+      expect(r.warnings.join(" ")).not.toMatch(/format looks unusual/i);
+    });
+  });
 });

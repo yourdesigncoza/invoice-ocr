@@ -17,7 +17,10 @@ const VAT_RECONCILE_TOLERANCE = 0.02; // 2 cents
  * validation, before the document reaches the review screen. Produces
  * plain-language warnings; never mutates the extraction.
  */
-export function validateExtraction(ex: Extraction): ValidationResult {
+export function validateExtraction(
+  ex: Extraction,
+  opts: { defaultCurrency?: string } = {},
+): ValidationResult {
   const warnings: string[] = [];
   let hardFail = false;
   let reconcileFailed = false;
@@ -79,6 +82,17 @@ export function validateExtraction(ex: Extraction): ValidationResult {
   // VAT number expected on a tax invoice
   if (isFormalInvoice && !ex.supplier.vat_number) {
     warnings.push("VAT number missing on a tax invoice");
+  }
+
+  // SA VAT-number shape lint — gated on the tenant's currency, NOT a global
+  // country assumption: SA VAT numbers are 10 digits starting with 4. Soft
+  // (never a hard fail); flags the digit-transposition misreads we see most.
+  if (opts.defaultCurrency === "ZAR" && ex.supplier.vat_number) {
+    if (!/^4\d{9}$/.test(ex.supplier.vat_number.replace(/\D/g, ""))) {
+      warnings.push(
+        "VAT number format looks unusual for SA (expected 10 digits starting with 4) — verify",
+      );
+    }
   }
 
   return { warnings, hardFail, reconcileFailed };

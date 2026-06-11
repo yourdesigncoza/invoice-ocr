@@ -62,14 +62,16 @@ export interface InvoiceFields {
  * extraction_log. Throwing is the caller's signal to mark the upload failed.
  */
 export async function processInvoice(
-  input: ExtractionInput & { provider?: ProviderId },
+  input: ExtractionInput & { provider?: ProviderId; defaultCurrency?: string },
 ): Promise<ProcessedInvoice> {
   const providerId = input.provider ?? "openai_vision";
   const provider = getProvider(providerId);
   const result = await provider.extract(input);
   const ex = result.extraction;
 
-  const { warnings: ruleWarnings, hardFail, reconcileFailed } = validateExtraction(ex);
+  const { warnings: ruleWarnings, hardFail, reconcileFailed } = validateExtraction(ex, {
+    defaultCurrency: input.defaultCurrency,
+  });
   const warnings = filterNoiseWarnings(dedupe([...ex.warnings, ...ruleWarnings]));
   const confidence = scoreDocument(ex, { reconcileFailed });
   const status = deriveStatus(confidence, hardFail);

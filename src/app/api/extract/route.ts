@@ -101,11 +101,16 @@ async function storeOriginal(
   projectId: string | null,
 ): Promise<Job | { fileName: string; error: string }> {
   const fileName = file.name || "upload";
-  if (!ACCEPTED.includes(file.type)) {
-    return { fileName, error: `Unsupported type: ${file.type}` };
-  }
 
   const buffer = Buffer.from(await file.arrayBuffer());
+  // Trust the bytes, not the client-supplied file.type: sniff the magic bytes
+  // so a mislabelled or corrupt file fails here (a clear per-file error) rather
+  // than in the background, and use the detected type downstream.
+  const detected = sniffMime(buffer);
+  if (!detected || !ACCEPTED.includes(detected)) {
+    return { fileName, error: `Unsupported or unreadable file (${file.type || "unknown type"})` };
+  }
+
   const dir = crypto.randomUUID();
   // namespace every object under the owner's uid so Storage RLS can isolate it
   const objectPath = `${userId}/${dir}/${sanitize(fileName)}`;
@@ -113,7 +118,7 @@ async function storeOriginal(
   // store the original, untouched (PRD §4.5)
   const up = await supabase.storage
     .from(STORAGE_BUCKET)
-    .upload(objectPath, buffer, { contentType: file.type, upsert: false });
+    .upload(objectPath, buffer, { contentType: detected, upsert: false });
   if (up.error) return { fileName, error: `Storage: ${up.error.message}` };
 
   const { data: doc, error: docErr } = await supabase
@@ -121,7 +126,7 @@ async function storeOriginal(
     .insert({
       file_name: fileName,
       file_path: objectPath,
-      file_type: file.type,
+      file_type: detected,
       file_size: buffer.length,
       upload_status: "processing",
       user_id: userId,
@@ -138,7 +143,7 @@ async function storeOriginal(
     objectPath,
     dir,
     buffer,
-    mimeType: file.type,
+    mimeType: detected,
     userId,
     projectId,
   };
@@ -158,15 +163,9 @@ async function processStored(supabase: Supabase, job: Job) {
         .upload(processedPath, pre.data, { contentType: pre.mimeType, upsert: true });
     }
 
-    // extract (from the preprocessed image)
-    const processed = await processInvoice({
-      data: pre.data,
-      mimeType: pre.mimeType,
-      fileName,
-    });
-
-    // Currency is a per-user setting, not detected per invoice. Stamp the
-    // user's chosen default, overriding whatever the model guessed. Admin
+    // Currency is a per-user setting, not detected per invoice. Resolve it
+    // first: it both stamps the invoice (overriding the model's guess) and
+    // gates SA-specific validation (e.g. the VAT-number shape lint). Admin
     // client → scope the lookup by user_id explicitly.
     const { data: settings } = await supabase
       .from("user_settings")
@@ -174,6 +173,14 @@ async function processStored(supabase: Supabase, job: Job) {
       .eq("user_id", userId)
       .maybeSingle();
     const currencyCode = settings?.default_currency ?? DEFAULT_CURRENCY;
+
+    // extract (from the preprocessed image)
+    const processed = await processInvoice({
+      data: pre.data,
+      mimeType: pre.mimeType,
+      fileName,
+      defaultCurrency: currencyCode,
+    });
 
     // persist invoice
     const { data: invoice, error: invErr } = await supabase
@@ -260,4 +267,17 @@ async function processStored(supabase: Supabase, job: Job) {
 
 function sanitize(name: string) {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80);
+}
+
+/** Detect the real content type from magic bytes; null if unrecognised. */
+function sniffMime(buf: Buffer): string | null {
+  if (buf.length < 12) return null;
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47)
+    return "image/png";
+  if (buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46)
+    return "application/pdf"; // %PDF
+  if (buf.toString("ascii", 0, 4) === "RIFF" && buf.toString("ascii", 8, 12) === "WEBP")
+    return "image/webp";
+  return null;
 }
