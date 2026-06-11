@@ -5,10 +5,12 @@ import sharp from "sharp";
  * bhimrazy/receipt-ocr (MIT): cap the long side and re-encode, which cuts
  * vision token cost + latency without hurting legibility.
  *
- * We cap at 1568px — OpenAI's high-detail tile size — rather than a smaller
- * value, because thermal till slips have tiny print that downscaling too far
- * would destroy. Also auto-orients via EXIF. The ORIGINAL upload is never
- * mutated; this produces the `processed_file_path` companion.
+ * We cap the long side at 1568px — a ~1.15 MP budget that keeps thermal-slip
+ * print legible without paying for resolution the model discards. (gpt-4o's
+ * high-detail path fits the image to 2048² then scales the shortest side to
+ * 768px and tiles at 512px, so very large uploads buy little.) Also
+ * auto-orients via EXIF. The client now stores a higher-res original (≤2560px),
+ * so this server downscale to 1568 is what actually governs the model input.
  */
 export const MAX_SIDE = 1568;
 const JPEG_QUALITY = 85;

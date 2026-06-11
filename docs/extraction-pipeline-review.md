@@ -3,6 +3,15 @@
 An adversarial architecture review of the capture → OCR → model-usage flow,
 captured here so it can be attended to piecemeal. Date: 2026-06-11.
 
+**Status (2026-06-11): backlog worked through.** All six bugs (B1–B6) shipped and
+the three low-/medium-effort enhancements (E3, E4, E5) shipped. **E1** (crop-to-
+document) and **E2** (OCR cross-check) are **deferred with rationale** (below) —
+both need infra/validation work (real document detection + gold-set harness
+parity; an OCR engine + deploy-measured noise tuning) that shouldn't be landed
+blind against the project's own regression rule. The only other open item is the
+long-term durable-queue under B2. Gold set after the shipped changes: 92%, all
+PRD §12.1 targets met, no regression.
+
 **Scope reviewed:** `UploadClient.tsx` → `compress.ts` → `api/extract/route.ts`
 (Phase 1 store + Phase 2 `after()`) → `preprocess.ts` → `openai-vision.ts` →
 `schema.ts` → `validate.ts` → `confidence.ts` → `index.ts`.
@@ -75,85 +84,80 @@ must re-run `eval/score_models.py` against the full gold set before it ships.
   is unaffected. B1 left the image content-part byte-identical, so it's
   unaffected too.
 
-### B4 — Credit-note exemption is dead code · MEDIUM
-- [ ] `validate.ts:26-28` exempts negative totals for
-      `/credit|refund/.test(document_type)`, but `DOCUMENT_TYPES`
-      (`constants.ts:13-22`) has no credit-like type → branch can never match. A
-      legit supplier credit note hardFails as "Negative total on a non-credit
-      document."
-- [ ] **Fix:** add `"Credit Note"` to `DOCUMENT_TYPES` (prompt rule 6 then offers
-      it to the model and the existing regex starts working). Re-run gold set.
+### B4 — Credit-note exemption is dead code · MEDIUM · ✅ DONE 2026-06-11
+- [x] `validate.ts` exempted negative totals for `/credit|refund/` on
+      document_type, but `DOCUMENT_TYPES` had no credit-like value → never matched.
+- [x] **Fix shipped:** added `"Credit Note"` to `DOCUMENT_TYPES` (constants +
+      migration 0009 `alter type document_type add value`). Prompt now offers it
+      and the regex works. Gold set re-run: document_type held at 34/34 (100%),
+      overall 92% (within noise) — no regression.
 
-### B5 — "Untouched original" guarantee is hollow · MEDIUM (audit + future-proofing)
-- [ ] What's stored as the original is the client-recompressed 1568px/q0.82 JPEG
-      with **EXIF stripped** (`compress.ts` canvas re-encode); the camera-native
-      file never leaves the phone. Consequences: re-extraction / region-crop / a
-      future better model can never see >1568px; no capture-time/GPS for the
-      audit trail of financial records. (`preprocess.ts:10`'s "original never
-      mutated" is true only server-side.)
-- [ ] Symptom: because the client already caps at 1568, the server `sharp` path
-      almost never fires → `processed_file_path` is ~always null and the
-      server-side EXIF-orient never runs.
-- [ ] **Fix:** raise client `MAX_SIDE` to ~2400–2560 (a receipt at 2560/q0.85 is
-      ~1–2 MB, well under the 4.5 MB body limit) so the *stored* original keeps
-      headroom while the server's 1568 cap still governs what's sent to the model
-      (makes the currently-dead server preprocess layer meaningful again).
-- [ ] Optional: read EXIF `DateTimeOriginal` client-side before re-encode, post it
-      as a field onto `document_uploads`.
+### B5 — "Untouched original" guarantee is hollow · MEDIUM · ✅ DONE 2026-06-11
+- [x] Stored "original" was the client-recompressed 1568px/q0.82 JPEG with EXIF
+      stripped; resolution capped forever, server `sharp` path almost never fired.
+- [x] **Fix shipped:** raised client `MAX_SIDE` to 2560 (q0.85) so the stored
+      original keeps headroom; the server's 1568 cap now actually governs the
+      model input. `preprocess.ts` comment corrected (1568 attribution).
+- [ ] Not done (optional): post EXIF `DateTimeOriginal` onto `document_uploads`
+      for the audit trail. (Canvas re-encode still strips EXIF; capture-time
+      metadata would need reading before re-encode.)
 
-### B6 — Opaque client failure modes · LOW
-- [ ] If compression fails (HEIC, low-memory canvas) the original >4.5 MB file is
-      uploaded anyway and dies at the Vercel body limit with a non-JSON response →
-      `res.json()` throws → user sees `"Upload error: SyntaxError…"`. HEIC dies
-      later with a raw server message.
-- [ ] **Fix:** post-compress client guard — type ∈ accepted set and size < ~4 MB —
-      with a human message ("This photo format isn't supported / file too large").
-      HEIC also sails past the broad `image/*` camera input and drag-drop (no
-      client type filter).
+### B6 — Opaque client failure modes · LOW · ✅ DONE 2026-06-11
+- [x] HEIC / oversized files died with an opaque `SyntaxError` at the body limit.
+- [x] **Fix shipped:** post-compress guard in `UploadClient` checks type ∈
+      accepted set and size < 4 MB, surfaces a human message, and uploads only
+      the sendable files (staying on the page so rejects remain visible).
 
 ---
 
 ## Enhancements — optional, ranked by impact/effort
 
-### E1 — Crop to the document, don't just downscale · HIGH impact / MEDIUM effort
-- [ ] gpt-4o's high-detail pipeline scales the **shortest** side to 768px, so
-      effective DPI depends on aspect ratio; receipt photos carry 30–50% dead
-      background (table, hand). A cheap content-crop to the document boundary
-      raises effective resolution on the print — exactly where the I/1, O/0, G/6
-      confusions in `invoice_number` / `vat_number` live. Likely worth more than
-      any prompt tweak. Validate on the gold set.
-- [ ] Note: `preprocess.ts:8` mis-attributes 1568px to "OpenAI's high-detail tile
-      size" — 1568 is Anthropic/Claude's recommended max; OpenAI fits 2048², then
-      shortest-side 768, tiles at 512. Fix the comment.
+### E1 — Crop to the document, don't just downscale · HIGH impact / MEDIUM effort · ⏸ DEFERRED 2026-06-11
+The valuable version raises effective DPI on the print (where the I/1, O/0, G/6
+confusions live) by cropping the 30–50% dead background out of receipt photos.
+**Deferred — cannot be shipped safely in this autonomous pass**, because:
+1. **It needs real document detection, not a trim.** `sharp.trim()` keys off the
+   top-left pixel and is a near-no-op on the textured (table/hand) backgrounds of
+   the phone photos that actually need it; it only helps clean scans. A genuine
+   content-crop needs edge/contour detection (OpenCV-class), which is a real
+   feature with its own regression risk (cropping *into* the receipt).
+2. **The regression rule can't be honored without harness parity.** The gold set
+   (`eval/compare_models.py`) mirrors the TS preprocessing in its own Python
+   `preprocess_b64`; a crop added only to `preprocess.ts` would never be exercised
+   by the scorer, so "validate on the gold set" would be meaningless until the
+   same crop is ported there. That porting is itself substantial.
+   → Do as a focused, separately-tested change with harness parity first.
+- [x] Trivial sub-item done: corrected the `preprocess.ts` 1568px mis-attribution
+      comment (it's Anthropic's recommended max, not an OpenAI tile size).
 
-### E2 — Cheap OCR as a verification layer (not a second extractor) · MED-HIGH impact / MEDIUM effort
-- [ ] Run one cheap text-OCR pass (Google Vision `TEXT_DETECTION` ~$1.50/1k, or
-      tesseract-wasm $0) over the stored image; store it in `raw_ocr_text` —
-      which today wrongly holds the model's own JSON (mild PRD §7.3.1 contract
-      violation; `index.ts` sets `rawText: content`).
-- [ ] Deterministic cross-check: does the LLM's `invoice_number` / `vat_number`
-      appear (modulo whitespace) in the OCR dump? Present → confidence boost;
-      absent → per-field "could not be cross-verified" warning. Catches the
-      single-char hallucinations measured in eval; feeds B3's ceiling. (Some
-      misses stay irreducible.)
+### E2 — Cheap OCR as a verification layer · MED-HIGH impact / MEDIUM effort · ⏸ DEFERRED 2026-06-11
+Cross-check the LLM's `invoice_number`/`vat_number` against a cheap text-OCR pass
+(present → boost; absent → "couldn't cross-verify" warning), and populate
+`raw_ocr_text` with real OCR text (today it holds the model's JSON — a mild PRD
+§7.3.1 contract violation). **Deferred — needs infra that can't be validated in
+this pass:**
+- An OCR engine: tesseract-wasm (~MB bundle + seconds/image in the background
+  function, unverifiable without a Vercel deploy) or a paid cloud OCR (creds +
+  cost). Either is a real integration decision.
+- Tuning to avoid false "couldn't cross-verify" noise on poor thermal-slip OCR,
+  which would erode trust in the warning list. Needs the gold set + real slips.
+  → Best as a dedicated change with a deploy to measure latency + warning noise.
 
-### E3 — Parallelize Phase 2 + persist token usage · MED impact / LOW effort
-- [ ] Bounded-concurrency batch (overlaps with B2 fix-i) turns a 10-photo batch
-      from ~3–4 min to <1 min.
-- [ ] Capture `completion.usage` into `extraction_logs` → per-document cost
-      telemetry before public signup (a flagged budget risk).
+### E3 — Parallelize Phase 2 + persist token usage · MED impact / LOW effort · ✅ DONE 2026-06-11
+- [x] Parallelized as part of B2 (`PHASE2_CONCURRENCY = 4`).
+- [x] `completion.usage` captured and stored on `extraction_logs`
+      (prompt/completion/total tokens; migration 0010). Threaded via
+      `ProviderResult.usage` → `ProcessedInvoice.usage`.
 
-### E4 — Currency-gated soft VAT-number lint · LOW-MED impact / LOW effort
-- [ ] Survives the multi-country objection because it's per-tenant-gated, not a
-      country assumption: **only when** `default_currency === "ZAR"`, warn (never
-      fail) if `vat_number` isn't 10 digits starting with `4`. Flags the
-      digit-transposition class measured at ~88%. Skip if considered re-raising a
-      settled decision.
+### E4 — Currency-gated soft VAT-number lint · LOW-MED impact / LOW effort · ✅ DONE 2026-06-11
+- [x] Shipped: `validateExtraction(ex, { defaultCurrency })` warns (never fails)
+      when `default_currency === "ZAR"` and `vat_number` isn't 10 digits starting
+      with 4. Currency resolved before extraction in `route.ts`; unit-tested.
 
-### E5 — Magic-byte sniff in `storeOriginal` · LOW impact / trivial
-- [ ] `file.type` is client/accident-controlled; sniff first bytes (or rely on
-      `sharp(buffer).metadata()` succeeding) to turn confusing background failures
-      into upfront 400s.
+### E5 — Magic-byte sniff in `storeOriginal` · LOW impact / trivial · ✅ DONE 2026-06-11
+- [x] Shipped: `sniffMime(buffer)` (JPEG/PNG/PDF/WEBP signatures) replaces trust
+      in `file.type`; unrecognised files reject upfront, detected type used
+      downstream.
 
 **Explicitly not recommended:** deskew / contrast / grayscale preprocessing (new
 regression surface across the document-type matrix; gpt-4o is robust to moderate
