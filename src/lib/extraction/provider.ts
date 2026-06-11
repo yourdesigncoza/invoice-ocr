@@ -8,12 +8,19 @@ export interface ExtractionInput {
   fileName?: string;
 }
 
+export interface TokenUsage {
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+  total_tokens: number | null;
+}
+
 export interface ProviderResult {
   extraction: Extraction; // schema-valid structured data
   rawText: string | null; // raw OCR / model text, stored separately (PRD §7.3.1)
   providerName: string;
   providerModel: string | null;
   durationMs: number;
+  usage: TokenUsage | null; // token counts for cost telemetry (null if absent)
 }
 
 /**

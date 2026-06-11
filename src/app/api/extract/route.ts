@@ -221,6 +221,9 @@ async function processStored(supabase: Supabase, job: Job) {
       warnings: processed.warnings,
       errors: [],
       processing_duration_ms: processed.durationMs,
+      prompt_tokens: processed.usage?.prompt_tokens ?? null,
+      completion_tokens: processed.usage?.completion_tokens ?? null,
+      total_tokens: processed.usage?.total_tokens ?? null,
     });
 
     // duplicate check before approval (PRD §7.10) — scoped to this user

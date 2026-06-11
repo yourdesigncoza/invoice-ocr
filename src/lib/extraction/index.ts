@@ -1,4 +1,4 @@
-import type { ExtractionInput, ProviderId } from "./provider";
+import type { ExtractionInput, ProviderId, TokenUsage } from "./provider";
 import { OpenAIVisionProvider } from "./openai-vision";
 import { validateExtraction, filterNoiseWarnings } from "./validate";
 import { scoreDocument, deriveStatus } from "./confidence";
@@ -32,6 +32,7 @@ export interface ProcessedInvoice {
   providerName: string;
   providerModel: string | null;
   durationMs: number;
+  usage: TokenUsage | null;
 }
 
 export interface InvoiceFields {
@@ -86,6 +87,7 @@ export async function processInvoice(
     providerName: result.providerName,
     providerModel: result.providerModel,
     durationMs: result.durationMs,
+    usage: result.usage,
   };
 }
 

@@ -1,5 +1,10 @@
 import OpenAI from "openai";
-import type { ExtractionProvider, ExtractionInput, ProviderResult } from "./provider";
+import type {
+  ExtractionProvider,
+  ExtractionInput,
+  ProviderResult,
+  TokenUsage,
+} from "./provider";
 import { parseExtraction, EXTRACTION_JSON_SCHEMA } from "./schema";
 import { EXTRACTION_SYSTEM_PROMPT, EXTRACTION_USER_PROMPT } from "./prompt";
 
@@ -51,37 +56,38 @@ export class OpenAIVisionProvider implements ExtractionProvider {
           }
         : { type: "image_url", image_url: { url: dataUrl, detail: "high" } };
 
-    let content: string;
+    let result: { content: string; usage: TokenUsage | null };
     try {
-      content = await this.call(this.preferredFormat, media);
+      result = await this.call(this.preferredFormat, media);
     } catch (err) {
       // Fall back to json_object if the endpoint rejected strict json_schema.
       if (this.preferredFormat === "json_schema" && isFormatUnsupported(err)) {
-        content = await this.call("json_object", media);
+        result = await this.call("json_object", media);
       } else {
         throw err;
       }
     }
 
-    if (!content) throw new Error("Empty response from vision model");
+    if (!result.content) throw new Error("Empty response from vision model");
 
     // parseExtraction throws ZodError on malformed output — caught upstream,
     // which keeps bad extractions out of the review queue (PRD §7.3.1).
-    const extraction = parseExtraction(JSON.parse(content));
+    const extraction = parseExtraction(JSON.parse(result.content));
 
     return {
       extraction,
-      rawText: content,
+      rawText: result.content,
       providerName: this.name,
       providerModel: this.model,
       durationMs: Date.now() - started,
+      usage: result.usage,
     };
   }
 
   private async call(
     format: ResponseFormat,
     media: OpenAI.Chat.Completions.ChatCompletionContentPart,
-  ): Promise<string> {
+  ): Promise<{ content: string; usage: TokenUsage | null }> {
     // In json_object mode the model gets the schema in-prompt (it can't be
     // enforced server-side), so it still produces the right shape.
     const userText =
@@ -106,7 +112,17 @@ export class OpenAIVisionProvider implements ExtractionProvider {
         },
       ],
     });
-    return completion.choices[0]?.message?.content ?? "";
+    const u = completion.usage;
+    return {
+      content: completion.choices[0]?.message?.content ?? "",
+      usage: u
+        ? {
+            prompt_tokens: u.prompt_tokens ?? null,
+            completion_tokens: u.completion_tokens ?? null,
+            total_tokens: u.total_tokens ?? null,
+          }
+        : null,
+    };
   }
 }
 
