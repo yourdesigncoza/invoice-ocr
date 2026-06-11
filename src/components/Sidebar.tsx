@@ -40,8 +40,15 @@ const ICONS: Record<string, LucideIcon> = {
   ShieldCheck,
 };
 
-const Wordmark = () => (
-  <div className="flex items-center gap-2.5">
+// The logo doubles as the "home" link everywhere it appears (desktop rail,
+// mobile top bar, mobile drawer). `onClick` lets the drawer close on navigate.
+const Wordmark = ({ onClick }: { onClick?: () => void }) => (
+  <Link
+    href="/dashboard"
+    onClick={onClick}
+    aria-label="SpendSilo — go to dashboard"
+    className="flex items-center gap-2.5"
+  >
     <Image
       src="/spendsilo_mark.png"
       alt="SpendSilo"
@@ -51,7 +58,7 @@ const Wordmark = () => (
       className="h-9 w-auto"
     />
     <span className="font-bold text-white tracking-tight text-xl">SpendSilo</span>
-  </div>
+  </Link>
 );
 
 /** Shared nav list — single source of truth for both desktop rail and mobile drawer. */
@@ -150,9 +157,7 @@ export function Sidebar({ email, isAdmin }: { email: string; isAdmin?: boolean }
 
       {/* MOBILE top bar */}
       <header className="md:hidden shrink-0 flex items-center justify-between bg-sidebar px-4 h-14">
-        <Link href="/dashboard">
-          <Wordmark />
-        </Link>
+        <Wordmark />
         <button
           type="button"
           aria-label="Open menu"
@@ -173,7 +178,7 @@ export function Sidebar({ email, isAdmin }: { email: string; isAdmin?: boolean }
           />
           <aside className="absolute inset-y-0 left-0 w-64 max-w-[80%] flex flex-col bg-sidebar text-slate-300 shadow-xl">
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
-              <Wordmark />
+              <Wordmark onClick={() => setOpen(false)} />
               <button
                 type="button"
                 aria-label="Close menu"
