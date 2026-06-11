@@ -5,12 +5,17 @@
 //     photo (3–8 MB) would fail to upload in production.
 //  2. Uploading multi-MB photos over mobile data is slow.
 //
-// Caps the long side at 1568px (matches the server-side sharp preprocess) and
-// re-encodes to JPEG. Respects EXIF orientation. Never throws — on any failure
-// it returns the original file so the upload still proceeds.
+// Caps the long side at 2560px and re-encodes to JPEG. Respects EXIF
+// orientation. Never throws — on any failure it returns the original file so the
+// upload still proceeds.
+//
+// 2560 (not 1568) so the *stored* original keeps resolution headroom for future
+// re-extraction / region-crops; the server still downscales to 1568 before the
+// model sees it (see preprocess.ts). A 2560/q0.85 receipt photo is ~1–2 MB,
+// comfortably under the 4.5 MB Vercel body limit.
 
-const MAX_SIDE = 1568;
-const QUALITY = 0.82;
+const MAX_SIDE = 2560;
+const QUALITY = 0.85;
 
 export async function compressImage(file: File): Promise<File> {
   if (!file.type.startsWith("image/")) return file; // PDFs etc. pass through
