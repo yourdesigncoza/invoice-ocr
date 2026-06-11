@@ -4,6 +4,8 @@ export interface ValidationResult {
   warnings: string[];
   /** true → the document should not auto-pass to a clean state. */
   hardFail: boolean;
+  /** subtotal + VAT ≠ total — strong evidence a money digit was misread. */
+  reconcileFailed: boolean;
 }
 
 // Flag totals outside a sane range for SA supplier invoices/receipts.
@@ -18,6 +20,7 @@ const VAT_RECONCILE_TOLERANCE = 0.02; // 2 cents
 export function validateExtraction(ex: Extraction): ValidationResult {
   const warnings: string[] = [];
   let hardFail = false;
+  let reconcileFailed = false;
 
   const total = ex.invoice.total_incl_vat.value;
   const subtotal = ex.invoice.subtotal_excl_vat.value;
@@ -64,6 +67,7 @@ export function validateExtraction(ex: Extraction): ValidationResult {
   // VAT reconciliation where subtotal + vat are both present
   if (subtotal !== null && vat !== null && total !== null) {
     if (Math.abs(subtotal + vat - total) > VAT_RECONCILE_TOLERANCE) {
+      reconcileFailed = true;
       warnings.push(
         "VAT check failed: total does not equal subtotal + VAT — manual review required",
       );
@@ -77,7 +81,7 @@ export function validateExtraction(ex: Extraction): ValidationResult {
     warnings.push("VAT number missing on a tax invoice");
   }
 
-  return { warnings, hardFail };
+  return { warnings, hardFail, reconcileFailed };
 }
 
 /**

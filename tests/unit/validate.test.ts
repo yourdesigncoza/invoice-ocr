@@ -20,13 +20,15 @@ describe("validateExtraction (PRD §7.3.2 business rules)", () => {
       extraction({ subtotal: 100, vat: 15, total: 115 }),
     );
     expect(r.warnings.join(" ")).not.toMatch(/total does not equal/i);
+    expect(r.reconcileFailed).toBe(false);
   });
 
-  it("warns when subtotal + vat != total", () => {
+  it("warns and flags reconcileFailed when subtotal + vat != total", () => {
     const r = validateExtraction(
       extraction({ subtotal: 100, vat: 15, total: 130 }),
     );
     expect(r.warnings.join(" ")).toMatch(/total does not equal subtotal/i);
+    expect(r.reconcileFailed).toBe(true);
   });
 
   it("warns when VAT is missing entirely", () => {

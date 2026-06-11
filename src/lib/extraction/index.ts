@@ -69,9 +69,9 @@ export async function processInvoice(
   const result = await provider.extract(input);
   const ex = result.extraction;
 
-  const { warnings: ruleWarnings, hardFail } = validateExtraction(ex);
+  const { warnings: ruleWarnings, hardFail, reconcileFailed } = validateExtraction(ex);
   const warnings = filterNoiseWarnings(dedupe([...ex.warnings, ...ruleWarnings]));
-  const confidence = scoreDocument(ex);
+  const confidence = scoreDocument(ex, { reconcileFailed });
   const status = deriveStatus(confidence, hardFail);
 
   return {

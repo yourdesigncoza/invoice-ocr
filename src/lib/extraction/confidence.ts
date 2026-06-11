@@ -2,14 +2,37 @@ import type { Extraction } from "./schema";
 import { CONFIDENCE, type InvoiceStatus } from "@/lib/constants";
 
 /**
- * Document confidence scoring (PRD §12). If the model supplied an overall
- * score we trust it; otherwise we derive one from the presence and per-field
- * confidence of the key fields (supplier, date, invoice no, total, VAT).
+ * Document confidence scoring (PRD §12). The model's self-reported score is
+ * the signal LLMs are weakest at (it stays high even when a field is misread or
+ * hallucinated), so we never trust it alone:
+ *  1. take min(model score, field-presence-derived score) — self-report can
+ *     lower the score but never raise it above what the fields actually support;
+ *  2. apply a deterministic ceiling — when the document's own arithmetic is
+ *     inconsistent (subtotal + VAT ≠ total) or both primary identity fields
+ *     (supplier AND date) are missing, cap below `medium` so it lands in
+ *     low_confidence regardless of what the model claimed.
  */
-export function scoreDocument(ex: Extraction): number {
-  if (ex.confidence_score !== null) return clamp(ex.confidence_score);
+export function scoreDocument(
+  ex: Extraction,
+  signals: { reconcileFailed?: boolean } = {},
+): number {
+  const derived = deriveScore(ex);
+  const base =
+    ex.confidence_score !== null
+      ? Math.min(clamp(ex.confidence_score), derived)
+      : derived;
 
-  // weighted key fields (PRD §12 confidence factors)
+  const supplierMissing = !(ex.supplier.normalized_name || ex.supplier.raw_name);
+  const dateMissing = ex.invoice.invoice_date.value === null;
+  if (signals.reconcileFailed || (supplierMissing && dateMissing)) {
+    // strictly below CONFIDENCE.medium → deriveStatus() returns low_confidence
+    return Math.min(base, CONFIDENCE.medium - 0.01);
+  }
+  return base;
+}
+
+/** Weighted field-presence score (PRD §12 confidence factors). */
+function deriveScore(ex: Extraction): number {
   const factors: Array<{ present: boolean; conf: number | null; weight: number }> = [
     { present: !!(ex.supplier.normalized_name || ex.supplier.raw_name), conf: null, weight: 0.2 },
     { present: ex.invoice.invoice_date.value !== null, conf: ex.invoice.invoice_date.confidence, weight: 0.15 },

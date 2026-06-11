@@ -3,30 +3,54 @@ import { scoreDocument, deriveStatus } from "@/lib/extraction/confidence";
 import { extraction } from "./_factories";
 
 describe("scoreDocument", () => {
-  it("trusts the model's overall score when present", () => {
-    expect(scoreDocument(extraction({ confidence_score: 0.73 }))).toBe(0.73);
+  const fullFields = {
+    supplier: { normalized_name: "SPAR" },
+    invoice_date: "2026-05-27",
+    invoice_number: "123",
+    total: 100,
+    vat: 15,
+  } as const;
+
+  it("keeps the model's score when field presence supports it", () => {
+    expect(
+      scoreDocument(extraction({ ...fullFields, confidence_score: 0.73 })),
+    ).toBe(0.73);
   });
 
-  it("clamps an out-of-range score", () => {
-    expect(scoreDocument(extraction({ confidence_score: 1.5 }))).toBe(1);
+  it("caps the model's self-report at what the fields support", () => {
+    // model claims near-certainty on a near-empty doc → the score reflects the
+    // (low) field-presence evidence, never the inflated self-report
+    expect(scoreDocument(extraction({ confidence_score: 0.95 }))).toBeLessThan(0.5);
+  });
+
+  it("never exceeds 1 for an out-of-range model score", () => {
+    expect(
+      scoreDocument(extraction({ ...fullFields, confidence_score: 1.5 })),
+    ).toBeLessThanOrEqual(1);
   });
 
   it("derives a low score from a near-empty extraction", () => {
-    const score = scoreDocument(extraction({}));
-    expect(score).toBeLessThan(0.5);
+    expect(scoreDocument(extraction({}))).toBeLessThan(0.5);
   });
 
   it("derives a higher score when key fields are present", () => {
+    expect(scoreDocument(extraction(fullFields))).toBeGreaterThan(0.7);
+  });
+
+  it("forces below the medium threshold when VAT does not reconcile", () => {
+    // subtotal + VAT ≠ total is near-proof a money digit was misread, so a
+    // high self-reported score must not keep the doc out of low_confidence
     const score = scoreDocument(
-      extraction({
-        supplier: { normalized_name: "SPAR" },
-        invoice_date: "2026-05-27",
-        invoice_number: "123",
-        total: 100,
-        vat: 15,
-      }),
+      extraction({ ...fullFields, confidence_score: 0.99 }),
+      { reconcileFailed: true },
     );
-    expect(score).toBeGreaterThan(0.7);
+    expect(score).toBeLessThan(0.7);
+    expect(deriveStatus(score, false)).toBe("low_confidence");
+  });
+
+  it("forces below the medium threshold when supplier and date are both missing", () => {
+    const score = scoreDocument(extraction({ total: 100, confidence_score: 0.99 }));
+    expect(score).toBeLessThan(0.7);
   });
 });
 
