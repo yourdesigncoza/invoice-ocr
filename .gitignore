@@ -73,6 +73,8 @@ __pycache__/
 # kept local (e.g. the bakery COS product, moved to projects/crumb/)
 /docs/feature-ideas/
 
+/bugs*
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
