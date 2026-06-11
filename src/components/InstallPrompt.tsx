@@ -1,19 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Smartphone, Share, MoreVertical, X } from "lucide-react";
 import {
-  initInstallCapture,
-  getInstallState,
   subscribe,
+  getInstallState,
+  getServerInstallState,
   promptInstall,
+  dismissInstall,
 } from "@/lib/pwaInstall";
 
 // Persistent floating "Add to Home Screen" banner, pinned to the bottom on
 // mobile only (md:hidden). Mounted once from the app layout, so it survives
-// client-side navigation; the X hides it for the current load. Reads the
-// globally-captured install event (see pwaInstall.ts) so a real one-tap install
-// works even though this mounts after the event has already fired.
+// client-side navigation; the X (or a completed install) hides it permanently
+// via a localStorage flag (see pwaInstall.ts). Also reads the globally-captured
+// install event so a real one-tap install works even though this mounts after
+// the event has already fired.
 //   - captured prompt available (Chromium) → fire the native install dialog;
 //   - iOS Safari → Share → Add to Home Screen steps;
 //   - otherwise → generic "use the browser menu" steps.
@@ -26,19 +28,17 @@ function detectIOS(): boolean {
 }
 
 export default function InstallPrompt() {
-  const [, force] = useState(0);
-  const [dismissed, setDismissed] = useState(false);
+  // Subscribe to the global install store. The server snapshot reports
+  // "dismissed" so the banner never ships in SSR HTML (no flash); after
+  // hydration the real persisted state takes over. `subscribe` also lazily runs
+  // initInstallCapture(), so the store self-initializes.
+  const { canPrompt, installed, dismissed } = useSyncExternalStore(
+    subscribe,
+    getInstallState,
+    getServerInstallState,
+  );
   const [help, setHelp] = useState<null | "ios" | "generic">(null);
 
-  useEffect(() => {
-    // Subscribe BEFORE init so we receive the emit init fires when it detects
-    // we're already running standalone (see pwaInstall.initInstallCapture).
-    const unsubscribe = subscribe(() => force((n) => n + 1));
-    initInstallCapture();
-    return unsubscribe;
-  }, []);
-
-  const { canPrompt, installed } = getInstallState();
   if (installed || dismissed) return null;
 
   const onClick = async () => {
@@ -73,7 +73,7 @@ export default function InstallPrompt() {
           </button>
           <button
             type="button"
-            onClick={() => setDismissed(true)}
+            onClick={() => dismissInstall()}
             aria-label="Dismiss"
             className="shrink-0 -mr-1 p-1 text-slate-400 hover:text-white"
           >
@@ -127,7 +127,12 @@ export default function InstallPrompt() {
             <button
               type="button"
               className="w-full rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-white hover:bg-blue-700"
-              onClick={() => setHelp(null)}
+              onClick={() => {
+                // iOS/manual installs fire no `appinstalled` event, so this is
+                // our only signal the user has seen the steps — stop nagging.
+                setHelp(null);
+                dismissInstall();
+              }}
             >
               Got it
             </button>
