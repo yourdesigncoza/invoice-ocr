@@ -335,10 +335,12 @@ export function InvoiceModal({
               </div>
             )}
 
-            {/* body — one scroll region; stacks on mobile, two columns on lg.
-                `min-h-0` defeats the flexbox min-height bug that let the image
-                overflow its track and the fields render on top of it. */}
-            <div className="flex-1 min-h-0 overflow-auto flex flex-col lg:grid lg:grid-cols-2">
+            {/* body — one scroll region. On mobile it's a plain block: the
+                image and fields stack in normal flow so each reserves its full
+                height (no flex/grid track can shrink and let them overlap).
+                `min-h-0` lets the block scroll inside the flex-col card; lg
+                switches to the two-column grid. */}
+            <div className="flex-1 min-h-0 overflow-auto lg:grid lg:grid-cols-2">
               <div className="bg-slate-100 p-4 flex items-start justify-center min-h-48">
                 {loading && !imageUrl ? (
                   <Loader2 className="h-6 w-6 text-muted animate-spin mt-10" />

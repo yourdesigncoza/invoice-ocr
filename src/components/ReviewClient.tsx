@@ -210,9 +210,11 @@ export function ReviewClient({
         </div>
       )}
 
-      {/* Mobile: one scroll column so the image scrolls with the fields.
-          lg+: the PRD §7.4 split-pane with independently-scrolling panes. */}
-      <div className="flex-1 min-h-0 flex flex-col overflow-auto lg:grid lg:grid-cols-2 lg:overflow-hidden">
+      {/* Mobile: a plain block scroll region — image and fields stack in normal
+          flow (no flex/grid track can shrink and let them overlap), so the
+          image scrolls with the fields. lg+: the PRD §7.4 split-pane with
+          independently-scrolling panes. */}
+      <div className="flex-1 min-h-0 overflow-auto lg:grid lg:grid-cols-2 lg:overflow-hidden">
         {/* LEFT: original document (PRD §7.4) */}
         <div className="bg-slate-100 p-6 flex items-start justify-center lg:overflow-auto">
           {!imageUrl ? (
