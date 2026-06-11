@@ -5,6 +5,12 @@ import { getUser } from "@/lib/auth-guards";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// A 'processing' row older than this can never finish: the background `after()`
+// that owned it is long dead (function maxDuration is 300s), so it's stranded.
+// We reap it to 'failed' on the next re-discovery poll. 10 min = 2× the max
+// function lifetime plus margin.
+const STALE_PROCESSING_MS = 10 * 60 * 1000;
+
 /**
  * Lightweight polling endpoint for the upload notification provider.
  *
@@ -37,6 +43,16 @@ export async function GET(req: NextRequest) {
     if (ids.length === 0) return NextResponse.json({ uploads: [] });
     query = query.in("id", ids);
   } else {
+    // Re-discovery path (page load / app reopen): first reap any stranded rows
+    // so the UI stops showing a ghost "Processing…" forever. RLS scopes the
+    // update to the caller's own uploads.
+    const staleCutoff = new Date(Date.now() - STALE_PROCESSING_MS).toISOString();
+    await supabase
+      .from("document_uploads")
+      .update({ upload_status: "failed" })
+      .eq("upload_status", "processing")
+      .lt("created_at", staleCutoff);
+
     query = query
       .eq("upload_status", "processing")
       .order("created_at", { ascending: false })

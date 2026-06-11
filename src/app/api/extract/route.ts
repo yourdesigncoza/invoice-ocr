@@ -11,6 +11,10 @@ export const maxDuration = 300; // background vision work continues after the re
 
 const ACCEPTED = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
 
+// Max invoices processed concurrently in the background after() phase. Bounded
+// to stay polite to the OpenAI rate limit while collapsing batch wall-clock.
+const PHASE2_CONCURRENCY = 4;
+
 type Supabase = NonNullable<ReturnType<typeof createAdminSupabase>>;
 
 // a file that was stored and queued; carries the in-memory buffer into the
@@ -72,11 +76,17 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Phase 2 — heavy processing, after the response is sent
+  // Phase 2 — heavy processing, after the response is sent. Run jobs with
+  // bounded concurrency so a multi-photo batch finishes well inside the 300s
+  // function ceiling instead of serially (each job is I/O-bound on the vision
+  // call). `processStored` owns its own try/catch, so a failure can't reject
+  // the wave. The status endpoint reaps anything still stranded past 300s.
   if (jobs.length) {
     after(async () => {
-      for (const job of jobs) {
-        await processStored(supabase, job);
+      for (let i = 0; i < jobs.length; i += PHASE2_CONCURRENCY) {
+        await Promise.allSettled(
+          jobs.slice(i, i + PHASE2_CONCURRENCY).map((job) => processStored(supabase, job)),
+        );
       }
     });
   }
