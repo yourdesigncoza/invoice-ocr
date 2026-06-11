@@ -341,7 +341,7 @@ export function InvoiceModal({
                 `min-h-0` lets the block scroll inside the flex-col card; lg
                 switches to the two-column grid. */}
             <div className="flex-1 min-h-0 overflow-auto lg:grid lg:grid-cols-2">
-              <div className="bg-slate-100 p-4 flex items-start justify-center min-h-48">
+              <div className="bg-slate-100 flex items-start justify-center min-h-48">
                 {loading && !imageUrl ? (
                   <Loader2 className="h-6 w-6 text-muted animate-spin mt-10" />
                 ) : !imageUrl ? (
