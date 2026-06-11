@@ -4,12 +4,12 @@ import { getUser } from "@/lib/auth-guards";
 import { processInvoice } from "@/lib/extraction";
 import { preprocessImage } from "@/lib/extraction/preprocess";
 import { findDuplicates } from "@/lib/duplicates/detect";
-import { STORAGE_BUCKET, DEFAULT_CURRENCY } from "@/lib/constants";
+import { STORAGE_BUCKET, DEFAULT_CURRENCY, ACCEPTED_UPLOAD_TYPES } from "@/lib/constants";
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // background vision work continues after the response
 
-const ACCEPTED = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+const ACCEPTED: readonly string[] = ACCEPTED_UPLOAD_TYPES;
 
 // Max invoices processed concurrently in the background after() phase. Bounded
 // to stay polite to the OpenAI rate limit while collapsing batch wall-clock.

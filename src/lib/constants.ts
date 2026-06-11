@@ -23,6 +23,16 @@ export const DOCUMENT_TYPES = [
 ] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 
+// Upload MIME types accepted by both the client guard and the server ingest.
+export const ACCEPTED_UPLOAD_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+] as const;
+// Keep each multipart POST under Vercel's 4.5 MB serverless body limit.
+export const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+
 export const PAYMENT_METHODS = [
   "Cash",
   "Card",

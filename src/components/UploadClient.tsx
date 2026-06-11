@@ -13,6 +13,7 @@ import { Card } from "@/components/ui";
 import { useUploadNotifications } from "@/components/UploadNotifications";
 import { compressImage } from "@/lib/image/compress";
 import { cn } from "@/lib/utils";
+import { ACCEPTED_UPLOAD_TYPES, MAX_UPLOAD_BYTES } from "@/lib/constants";
 import type { Project } from "@/lib/types";
 
 interface UploadResult {
@@ -22,11 +23,24 @@ interface UploadResult {
   error?: string;
 }
 
-// Mirror the server's ACCEPTED list; HEIC etc. fall through compression as
-// their original type and get caught here instead of failing in the background.
-const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
-// Below the 4.5 MB Vercel serverless body limit, with margin.
-const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+// Group files into POSTs that each stay under the body limit. A single sendable
+// file is already ≤ MAX_UPLOAD_BYTES (guarded above), so it always fits.
+function chunkBySize(files: File[], maxBytes: number): File[][] {
+  const chunks: File[][] = [];
+  let cur: File[] = [];
+  let curBytes = 0;
+  for (const f of files) {
+    if (cur.length && curBytes + f.size > maxBytes) {
+      chunks.push(cur);
+      cur = [];
+      curBytes = 0;
+    }
+    cur.push(f);
+    curBytes += f.size;
+  }
+  if (cur.length) chunks.push(cur);
+  return chunks;
+}
 
 export function UploadClient({ projects = [] }: { projects?: Project[] }) {
   const router = useRouter();
@@ -52,9 +66,10 @@ export function UploadClient({ projects = [] }: { projects?: Project[] }) {
         // Guard before we hit the network: a format we can't process (e.g. an
         // un-compressible HEIC that fell through) or a file still over the
         // Vercel 4.5 MB body limit would otherwise fail with an opaque error.
+        const accepted: readonly string[] = ACCEPTED_UPLOAD_TYPES;
         const clientRejects: { fileName: string; error?: string }[] = [];
         const sendable = prepared.filter((f) => {
-          if (!ACCEPTED_TYPES.includes(f.type)) {
+          if (!accepted.includes(f.type)) {
             clientRejects.push({ fileName: f.name, error: `Unsupported format (${f.type || "unknown"}). Use JPG, PNG, WEBP, or PDF.` });
             return false;
           }
@@ -69,34 +84,46 @@ export function UploadClient({ projects = [] }: { projects?: Project[] }) {
           return;
         }
 
-        const form = new FormData();
-        sendable.forEach((f) => form.append("files", f));
-        if (projectId) form.append("projectId", projectId);
-
-        // returns fast: files are stored + queued, extraction runs in the
-        // background. We register the jobs for toast tracking and head to the
-        // dashboard rather than blocking on the vision call.
-        const res = await fetch("/api/extract", { method: "POST", body: form });
-        const json = await res.json();
-        if (!res.ok) {
-          setErrors([...clientRejects, { fileName: "Upload failed", error: json.error }]);
-          return;
+        // Send in chunks that each stay under the Vercel body limit — a single
+        // big POST of several 1–2 MB photos would 413. Returns fast: files are
+        // stored + queued, extraction runs in the background; we track jobs for
+        // toasts and head to the dashboard rather than block on the vision call.
+        const allUploads: UploadResult[] = [];
+        let requestError: string | null = null;
+        for (const chunk of chunkBySize(sendable, MAX_UPLOAD_BYTES)) {
+          const form = new FormData();
+          chunk.forEach((f) => form.append("files", f));
+          if (projectId) form.append("projectId", projectId);
+          const res = await fetch("/api/extract", { method: "POST", body: form });
+          let json: { uploads?: UploadResult[]; error?: string } = {};
+          try {
+            json = await res.json();
+          } catch {
+            /* non-JSON body (e.g. a platform 413) — fall through to the status check */
+          }
+          if (!res.ok) {
+            requestError = json.error ?? `Upload failed (${res.status})`;
+            break; // stop the batch; already-queued chunks keep processing
+          }
+          allUploads.push(...(json.uploads ?? []));
         }
-        const uploads: UploadResult[] = json.uploads ?? [];
-        const failed = uploads.filter((u) => !u.ok);
-        const ok = uploads.filter((u) => u.ok);
 
+        const failed = allUploads.filter((u) => !u.ok);
+        const ok = allUploads.filter((u) => u.ok);
         notify.startJobs(ok);
 
-        // Only leave the page clean if nothing was rejected anywhere; otherwise
-        // stay so the user can see which files need another try.
-        if (ok.length && !failed.length && !clientRejects.length) {
+        const errs = [
+          ...clientRejects,
+          ...failed.map((f) => ({ fileName: f.fileName, error: f.error })),
+        ];
+        if (requestError) errs.push({ fileName: "Upload failed", error: requestError });
+
+        // Leave the page clean only if something queued and nothing was rejected.
+        if (ok.length && errs.length === 0) {
           router.push("/dashboard");
           return;
         }
-        const serverFailed = failed.map((f) => ({ fileName: f.fileName, error: f.error }));
-        if (clientRejects.length || serverFailed.length)
-          setErrors([...clientRejects, ...serverFailed]);
+        if (errs.length) setErrors(errs);
       } catch (e) {
         setErrors([{ fileName: "Upload error", error: String(e) }]);
       } finally {
