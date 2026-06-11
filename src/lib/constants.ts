@@ -14,6 +14,7 @@ export const DOCUMENT_TYPES = [
   "Tax Invoice",
   "Receipt",
   "Cash Sale",
+  "Credit Note",
   "Purchase Notice",
   "Prepaid Electricity",
   "Statement",
