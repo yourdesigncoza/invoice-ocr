@@ -210,9 +210,11 @@ export function ReviewClient({
         </div>
       )}
 
-      <div className="flex-1 grid lg:grid-cols-2 overflow-hidden">
+      {/* Mobile: one scroll column so the image scrolls with the fields.
+          lg+: the PRD §7.4 split-pane with independently-scrolling panes. */}
+      <div className="flex-1 min-h-0 flex flex-col overflow-auto lg:grid lg:grid-cols-2 lg:overflow-hidden">
         {/* LEFT: original document (PRD §7.4) */}
-        <div className="bg-slate-100 overflow-auto p-6 flex items-start justify-center">
+        <div className="bg-slate-100 p-6 flex items-start justify-center lg:overflow-auto">
           {!imageUrl ? (
             <p className="text-sm text-muted mt-12">No file preview available.</p>
           ) : isPdf ? (
@@ -229,13 +231,13 @@ export function ReviewClient({
             <img
               src={imageUrl}
               alt="Original invoice"
-              className="max-w-full rounded-lg ring-1 ring-black/5"
+              className="max-w-full max-h-[50vh] lg:max-h-none rounded-lg ring-1 ring-black/5"
             />
           )}
         </div>
 
         {/* RIGHT: editable fields + supplier + duplicates + warnings */}
-        <div className="overflow-auto p-6 space-y-6">
+        <div className="p-6 space-y-6 lg:overflow-auto">
           {invoice.warnings?.length > 0 && (
             <Card className="p-3 border-amber-200 bg-amber-50/60">
               <div className="flex items-center gap-2 text-xs font-medium text-status-review mb-1.5">

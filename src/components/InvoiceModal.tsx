@@ -335,8 +335,10 @@ export function InvoiceModal({
               </div>
             )}
 
-            {/* body */}
-            <div className="grid lg:grid-cols-2 overflow-auto">
+            {/* body — one scroll region; stacks on mobile, two columns on lg.
+                `min-h-0` defeats the flexbox min-height bug that let the image
+                overflow its track and the fields render on top of it. */}
+            <div className="flex-1 min-h-0 overflow-auto flex flex-col lg:grid lg:grid-cols-2">
               <div className="bg-slate-100 p-4 flex items-start justify-center min-h-48">
                 {loading && !imageUrl ? (
                   <Loader2 className="h-6 w-6 text-muted animate-spin mt-10" />
@@ -356,7 +358,7 @@ export function InvoiceModal({
                   <img
                     src={imageUrl}
                     alt="Original invoice"
-                    className="max-w-full rounded-lg ring-1 ring-black/5"
+                    className="max-w-full max-h-[50vh] lg:max-h-none rounded-lg ring-1 ring-black/5"
                   />
                 )}
               </div>
