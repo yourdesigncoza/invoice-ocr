@@ -52,6 +52,20 @@ describe("scoreDocument", () => {
     const score = scoreDocument(extraction({ total: 100, confidence_score: 0.99 }));
     expect(score).toBeLessThan(0.7);
   });
+
+  it("does not punish a clean receipt for legitimately-absent VAT / invoice number", () => {
+    // a cash-sale slip with supplier+date+total but no printed VAT or invoice
+    // number is normal — it must NOT be forced into low_confidence
+    const score = scoreDocument(
+      extraction({
+        supplier: { normalized_name: "SPAR" },
+        invoice_date: "2026-05-27",
+        total: 168.95,
+      }),
+    );
+    expect(score).toBeGreaterThanOrEqual(0.7);
+    expect(deriveStatus(score, false)).toBe("needs_review");
+  });
 });
 
 describe("deriveStatus (nothing auto-approves, PRD §3)", () => {

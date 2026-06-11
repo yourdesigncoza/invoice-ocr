@@ -31,7 +31,16 @@ export function scoreDocument(
   return base;
 }
 
-/** Weighted field-presence score (PRD §12 confidence factors). */
+/**
+ * Field score = the model's per-field confidence averaged over the fields that
+ * are actually PRESENT (weighted by importance), NOT absolute coverage. This
+ * matters because absence is often legitimate — a thermal slip with no printed
+ * VAT or invoice number is normal (CLAUDE.md: "absence is a flag, not an
+ * error"). Penalising it for coverage would force every clean cash-sale slip to
+ * low_confidence and bury the genuinely-bad reads. Critical *missing* fields are
+ * handled separately by hardFail (no total) and the deterministic ceiling
+ * (supplier+date both missing / reconcile failure) in scoreDocument().
+ */
 function deriveScore(ex: Extraction): number {
   const factors: Array<{ present: boolean; conf: number | null; weight: number }> = [
     { present: !!(ex.supplier.normalized_name || ex.supplier.raw_name), conf: null, weight: 0.2 },
@@ -41,12 +50,15 @@ function deriveScore(ex: Extraction): number {
     { present: ex.invoice.vat_amount.value !== null, conf: ex.invoice.vat_amount.confidence, weight: 0.15 },
   ];
 
-  let score = 0;
+  let num = 0;
+  let den = 0;
   for (const f of factors) {
     if (!f.present) continue;
-    score += f.weight * (f.conf ?? 0.8); // assume 0.8 when field-level conf absent
+    num += f.weight * (f.conf ?? 0.8); // assume 0.8 when field-level conf absent
+    den += f.weight;
   }
-  return clamp(score);
+  if (den === 0) return 0; // nothing read at all
+  return clamp(num / den);
 }
 
 /**
