@@ -14,7 +14,7 @@ import { EXTRACTION_SYSTEM_PROMPT, EXTRACTION_USER_PROMPT } from "./prompt";
  *    Either way Zod re-validates, so the contract holds (PRD §7.3.1).
  *
  * Images should be pre-downscaled (see preprocess.ts) before they reach here.
- * PDFs must be converted to page images first.
+ * PDFs are sent to the model natively as a base64 `file` content part.
  */
 type ResponseFormat = "json_schema" | "json_object";
 
@@ -38,21 +38,26 @@ export class OpenAIVisionProvider implements ExtractionProvider {
   }
 
   async extract(input: ExtractionInput): Promise<ProviderResult> {
-    if (input.mimeType === "application/pdf") {
-      throw new Error(
-        "PDF received — convert to page images before extraction (preprocessing TODO, PRD §4.5).",
-      );
-    }
     const started = Date.now();
     const dataUrl = `data:${input.mimeType};base64,${input.data.toString("base64")}`;
+    // PDFs go to the model natively (gpt-4o accepts a base64 `file` content
+    // part and reads each page's text + image); raster images go as image_url
+    // with high detail. Either way the same prompt/schema/validation applies.
+    const media: OpenAI.Chat.Completions.ChatCompletionContentPart =
+      input.mimeType === "application/pdf"
+        ? {
+            type: "file",
+            file: { filename: input.fileName ?? "invoice.pdf", file_data: dataUrl },
+          }
+        : { type: "image_url", image_url: { url: dataUrl, detail: "high" } };
 
     let content: string;
     try {
-      content = await this.call(this.preferredFormat, dataUrl);
+      content = await this.call(this.preferredFormat, media);
     } catch (err) {
       // Fall back to json_object if the endpoint rejected strict json_schema.
       if (this.preferredFormat === "json_schema" && isFormatUnsupported(err)) {
-        content = await this.call("json_object", dataUrl);
+        content = await this.call("json_object", media);
       } else {
         throw err;
       }
@@ -73,7 +78,10 @@ export class OpenAIVisionProvider implements ExtractionProvider {
     };
   }
 
-  private async call(format: ResponseFormat, dataUrl: string): Promise<string> {
+  private async call(
+    format: ResponseFormat,
+    media: OpenAI.Chat.Completions.ChatCompletionContentPart,
+  ): Promise<string> {
     // In json_object mode the model gets the schema in-prompt (it can't be
     // enforced server-side), so it still produces the right shape.
     const userText =
@@ -94,10 +102,7 @@ export class OpenAIVisionProvider implements ExtractionProvider {
         { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
         {
           role: "user",
-          content: [
-            { type: "text", text: userText },
-            { type: "image_url", image_url: { url: dataUrl, detail: "high" } },
-          ],
+          content: [{ type: "text", text: userText }, media],
         },
       ],
     });
