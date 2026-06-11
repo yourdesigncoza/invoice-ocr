@@ -216,7 +216,7 @@ export function ReviewClient({
           independently-scrolling panes. */}
       <div className="flex-1 min-h-0 overflow-auto lg:grid lg:grid-cols-2 lg:overflow-hidden">
         {/* LEFT: original document (PRD §7.4) */}
-        <div className="bg-slate-100 p-6 flex items-start justify-center lg:overflow-auto">
+        <div className="bg-slate-100 flex items-start justify-center lg:overflow-auto">
           {!imageUrl ? (
             <p className="text-sm text-muted mt-12">No file preview available.</p>
           ) : isPdf ? (
