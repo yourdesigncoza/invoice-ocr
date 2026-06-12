@@ -94,7 +94,8 @@ export default async function ReportDetailPage(
         <>
           <h2 className="mt-8 mb-3 text-sm font-semibold">Spend by supplier</h2>
           <Card className="overflow-hidden">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[36rem]">
               <thead className="bg-slate-50 text-left text-muted">
                 <tr>
                   <th className="px-4 py-2.5 font-medium">Supplier</th>
@@ -118,6 +119,7 @@ export default async function ReportDetailPage(
                 ))}
               </tbody>
             </table>
+            </div>
           </Card>
         </>
       )}

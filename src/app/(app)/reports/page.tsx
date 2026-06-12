@@ -105,7 +105,8 @@ export default async function ReportsPage(props: PageProps<"/reports">) {
       {tabs}
 
       <Card className="overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[36rem]">
           <thead className="bg-slate-50 text-left text-muted">
             <tr>
               <th className="px-4 py-2.5 font-medium capitalize">{group}</th>
@@ -152,6 +153,7 @@ export default async function ReportsPage(props: PageProps<"/reports">) {
             })}
           </tbody>
         </table>
+        </div>
       </Card>
     </>
   );
