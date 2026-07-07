@@ -140,11 +140,32 @@ export function UploadNotificationsProvider({
   const dismiss = (id: string) =>
     setJobs((prev) => prev.filter((j) => j.id !== id));
 
+  // batch CTA: with several documents ready, drop the user into the first one —
+  // approve→next on the review screen then flows through the rest
+  const ready = jobs.filter((j) => j.status === "done" && j.invoiceId);
+  const dismissReady = () =>
+    setJobs((prev) => prev.filter((j) => !(j.status === "done" && j.invoiceId)));
+
   return (
     <UploadCtx.Provider value={{ startJobs }}>
       {children}
       {jobs.length > 0 && (
         <div className="fixed bottom-4 right-4 z-[60] w-80 max-w-[calc(100vw-2rem)] space-y-2">
+          {ready.length >= 2 && (
+            <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-blue-50 px-3 py-2.5 shadow-lg">
+              <CheckCircle2 className="h-5 w-5 shrink-0 text-primary" />
+              <div className="min-w-0 flex-1 text-sm font-medium">
+                {ready.length} invoices ready for review
+              </div>
+              <Link
+                href={`/review/${ready[0].invoiceId}`}
+                onClick={dismissReady}
+                className="shrink-0 text-sm font-semibold text-primary hover:underline"
+              >
+                Start reviewing →
+              </Link>
+            </div>
+          )}
           {jobs.map((job) => (
             <div
               key={job.id}

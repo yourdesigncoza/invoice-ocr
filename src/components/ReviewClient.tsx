@@ -44,6 +44,8 @@ interface Props {
   allSuppliers: Supplier[];
   duplicates: { reason: string; score: number; invoice: Invoice }[];
   projects: Project[];
+  /** next queue document — approve/reject/delete flow straight into it */
+  nextId: string | null;
 }
 
 // editable text/number/date/select fields shown on the right pane (PRD §7.4)
@@ -70,6 +72,7 @@ export function ReviewClient({
   allSuppliers,
   duplicates,
   projects,
+  nextId,
 }: Props) {
   const router = useRouter();
   const [values, setValues] = useState<Record<string, string>>(() => {
@@ -146,7 +149,8 @@ export function ReviewClient({
         setItemUpdates({});
         router.refresh();
       } else {
-        router.push("/review");
+        // flow to the next queued document instead of back to the list
+        router.push(nextId ? `/review/${nextId}` : "/review");
         router.refresh();
       }
     } catch (e) {
@@ -171,7 +175,7 @@ export function ReviewClient({
       const res = await fetch(`/api/invoices/${invoice.id}`, { method: "DELETE" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Delete failed");
-      router.push("/review");
+      router.push(nextId ? `/review/${nextId}` : "/review");
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

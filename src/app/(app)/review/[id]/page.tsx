@@ -1,5 +1,10 @@
 import { notFound } from "next/navigation";
-import { getInvoice, getActiveProjects, isSupabaseConfigured } from "@/lib/data";
+import {
+  getInvoice,
+  getInvoices,
+  getActiveProjects,
+  isSupabaseConfigured,
+} from "@/lib/data";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { findSupplierMatches } from "@/lib/suppliers/matching";
 import { STORAGE_BUCKET } from "@/lib/constants";
@@ -62,6 +67,14 @@ export default async function ReviewDetailPage(
   const activeProjects = await getActiveProjects();
   const projects = activeProjects.length >= 2 ? activeProjects : [];
 
+  // approve→next: the first other document in queue order, so finishing this
+  // one flows straight into the next review instead of back to the list
+  const queueDocs = await getInvoices({
+    status: ["needs_review", "low_confidence"],
+    limit: 100,
+  });
+  const nextId = queueDocs.find((d) => d.id !== invoice.id)?.id ?? null;
+
   return (
     <ReviewClient
       invoice={invoice}
@@ -81,6 +94,7 @@ export default async function ReviewDetailPage(
         invoice: d.possible_duplicate as Invoice,
       }))}
       projects={projects}
+      nextId={nextId}
     />
   );
 }
