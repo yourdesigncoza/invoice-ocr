@@ -1,7 +1,7 @@
 // SpendSilo service worker — minimal offline shell.
 // We intentionally do NOT cache API calls, authenticated HTML, or Supabase
 // signed image URLs (private, per-tenant invoice data).
-const CACHE = "spendsilo-v1";
+const CACHE = "spendsilo-v2";
 const APP_SHELL = ["/offline.html", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
@@ -24,7 +24,7 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
-  // Never cache API responses or cross-origin (Supabase signed URLs, OpenAI).
+  // Never touch API responses or cross-origin (Supabase signed URLs, OpenAI).
   if (url.origin !== self.location.origin || url.pathname.startsWith("/api/")) {
     return;
   }
@@ -38,7 +38,20 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Cache-first for same-origin static assets (JS, CSS, icons, fonts).
+  // Cache-first ONLY for immutable static assets. Everything else passes
+  // through untouched — in particular Next's RSC payload fetches (soft
+  // navigation): they carry authenticated per-tenant data (same privacy rule
+  // as page HTML above), and replaying them from cache breaks client-side
+  // navigation (Next falls back to full page loads, losing client state such
+  // as the upload-progress toasts).
+  const isStaticAsset =
+    url.pathname.startsWith("/_next/static/") ||
+    url.pathname.startsWith("/icons/") ||
+    url.pathname === "/offline.html" ||
+    url.pathname === "/manifest.webmanifest" ||
+    /\.(png|jpe?g|webp|svg|ico|woff2?)$/.test(url.pathname);
+  if (!isStaticAsset) return;
+
   event.respondWith(
     caches.match(request).then(
       (cached) =>
