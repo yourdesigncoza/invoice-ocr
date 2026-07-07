@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getUser } from "@/lib/auth-guards";
-import { normalizeName } from "@/lib/suppliers/matching";
+import { normalizeName, resolveSupplierOnApproval } from "@/lib/suppliers/matching";
 import { STORAGE_BUCKET, type InvoiceStatus } from "@/lib/constants";
 import {
   defaultAllocation,
@@ -287,6 +287,28 @@ export async function PATCH(
         }));
         splitEntries = defaultAllocation(nextProjectId, nextTotal);
       }
+    }
+  }
+
+  // Auto-silo on approval: the reviewer approved an invoice with this supplier
+  // name on screen, so link a high-confidence existing silo or create one —
+  // otherwise the Suppliers page only ever fills through the manual box. Uses
+  // the reviewer's corrected values when present ("key in update", not ??, so
+  // an explicit clear isn't overridden by the stale extracted value).
+  if (body.action === "approve" && !update.supplier_id && !before.supplier_id) {
+    const field = (k: string) =>
+      (k in update ? update[k] : before[k]) as string | null;
+    try {
+      const auto = await resolveSupplierOnApproval(supabase, user.id, {
+        rawName: field("original_supplier_name"),
+        vatNumber: field("vat_number"),
+        phone: field("phone"),
+        address: field("address"),
+      });
+      if (auto) update.supplier_id = auto.supplierId;
+    } catch (autoErr) {
+      const message = autoErr instanceof Error ? autoErr.message : String(autoErr);
+      return NextResponse.json({ error: message }, { status: 400 });
     }
   }
 

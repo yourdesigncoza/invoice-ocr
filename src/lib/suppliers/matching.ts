@@ -150,6 +150,59 @@ export async function findSupplierMatches(
   return rankSuppliers(signals, candidates).slice(0, limit);
 }
 
+/**
+ * Auto-link floor: VAT (0.99), phone (0.95), normalized-name (0.97) and only
+ * the strongest fuzzy matches (≥ ~86% similarity) qualify. Below it we create
+ * a fresh silo instead — a wrong merge silently corrupts spend-per-supplier,
+ * while a near-duplicate silo is visible and fixable by re-linking in review.
+ */
+export const AUTO_LINK_THRESHOLD = 0.9;
+
+/** Pure decision: which match (if any) is safe to link without a human. */
+export function pickAutoLink(matches: SupplierMatch[]): SupplierMatch | null {
+  const best = matches[0];
+  return best && best.score >= AUTO_LINK_THRESHOLD ? best : null;
+}
+
+/**
+ * Auto-silo on approval (the reviewer just approved an invoice showing this
+ * supplier name, so materialising the silo is the expected outcome): link a
+ * high-confidence existing supplier, else create one from the approved
+ * details. Returns null only when there is no usable name. Pass an RLS-scoped
+ * client and the caller's user id (every insert must stamp user_id).
+ */
+export async function resolveSupplierOnApproval(
+  supabase: SupabaseClient,
+  userId: string,
+  signals: MatchSignals,
+): Promise<{ supplierId: string; created: boolean; reason: string } | null> {
+  const rawName = signals.rawName?.trim();
+  if (!rawName) return null;
+
+  const matches = await findSupplierMatches(supabase, signals);
+  const auto = pickAutoLink(matches);
+  if (auto) {
+    return { supplierId: auto.supplier.id, created: false, reason: auto.reason };
+  }
+
+  const { data, error } = await supabase
+    .from("suppliers")
+    .insert({
+      supplier_name: rawName,
+      normalized_name: normalizeName(rawName),
+      vat_number: signals.vatNumber || null,
+      phone: signals.phone || null,
+      address: signals.address || null,
+      user_id: userId,
+    })
+    .select("id")
+    .single();
+  if (error || !data) {
+    throw new Error(`auto-silo: ${error?.message ?? "insert failed"}`);
+  }
+  return { supplierId: data.id, created: true, reason: "New silo from approved name" };
+}
+
 function eq(a: string, b: string) {
   return a.replace(/\s/g, "").toLowerCase() === b.replace(/\s/g, "").toLowerCase();
 }
