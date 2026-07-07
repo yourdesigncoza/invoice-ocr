@@ -21,7 +21,14 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { ConfidenceBadge } from "@/components/ConfidenceBadge";
 import { formatMoney, formatDate, formatVat } from "@/lib/utils";
 import { DOCUMENT_TYPES, PAYMENT_METHODS } from "@/lib/constants";
-import type { InvoiceWithSupplier, InvoiceItem, Project } from "@/lib/types";
+import type {
+  InvoiceWithSupplier,
+  InvoiceItem,
+  InvoiceSiteAllocation,
+  Project,
+} from "@/lib/types";
+import { SiteSplitEditor } from "@/components/SiteSplitEditor";
+import type { SplitPayload } from "@/lib/allocations/split";
 
 /**
  * "View" trigger + invoice preview modal. Most fields come from the row the
@@ -83,6 +90,8 @@ export function InvoiceModal({
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [isPdf, setIsPdf] = useState(false);
   const [items, setItems] = useState<InvoiceItem[]>([]);
+  const [allocations, setAllocations] = useState<InvoiceSiteAllocation[]>([]);
+  const [split, setSplit] = useState<SplitPayload | null>(null);
   const [loading, setLoading] = useState(false);
 
   const [editing, setEditing] = useState(false);
@@ -121,6 +130,7 @@ export function InvoiceModal({
         setImageUrl(d.imageUrl ?? null);
         setIsPdf(Boolean(d.isPdf));
         setItems(d.items ?? []);
+        setAllocations(d.allocations ?? []);
       })
       .finally(() => active && setLoading(false));
     return () => {
@@ -137,6 +147,7 @@ export function InvoiceModal({
     setValues(initValues(invoice));
     setProjectId(invoice.project_id ?? "");
     setCorrected(new Set());
+    setSplit(null);
     setError(null);
     setEditing(true);
   }
@@ -160,6 +171,7 @@ export function InvoiceModal({
           fields,
           correctedFields: [...corrected],
           linkProjectId: projectId,
+          split: split ?? undefined,
         }),
       });
       const json = await res.json();
@@ -448,6 +460,21 @@ export function InvoiceModal({
                   </div>
                 )}
 
+                {/* per-site breakdown (read mode) — stored allocation truth */}
+                {!editing && allocations.length > 1 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {allocations.map((a) => (
+                      <span
+                        key={a.id}
+                        className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs tabular-nums"
+                      >
+                        <span className="font-medium">{a.project?.name ?? "—"}</span>
+                        {formatMoney(Number(a.amount), invoice.currency_code)}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
                 <dl className="text-sm divide-y divide-border">
                   {MAIN_FIELDS.map(renderRow)}
                 </dl>
@@ -472,7 +499,20 @@ export function InvoiceModal({
                   )}
                 </div>
 
-                {items.length > 0 && (
+                {editing && (items.length > 0 || projects.length >= 2) ? (
+                  <SiteSplitEditor
+                    items={items}
+                    projects={projects}
+                    defaultProjectId={projectId || null}
+                    totalInclVat={
+                      values.total_incl_vat === "" ? null : Number(values.total_incl_vat)
+                    }
+                    currency={invoice.currency_code}
+                    allocations={allocations}
+                    onChange={setSplit}
+                    disabled={saving}
+                  />
+                ) : items.length > 0 ? (
                   <div>
                     <div className="text-xs font-semibold text-muted uppercase tracking-wide mb-1.5">
                       Line items
@@ -495,7 +535,7 @@ export function InvoiceModal({
                       </table>
                     </div>
                   </div>
-                )}
+                ) : null}
               </div>
             </div>
 
@@ -511,7 +551,7 @@ export function InvoiceModal({
                   </button>
                   <button
                     onClick={save}
-                    disabled={saving || (corrected.size === 0 && !projectChanged)}
+                    disabled={saving || (corrected.size === 0 && !projectChanged && split === null)}
                     className="inline-flex items-center gap-2 rounded-lg bg-primary text-white px-3.5 py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:pointer-events-none"
                   >
                     {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}

@@ -11,6 +11,7 @@ import {
   ArrowRight,
   Sparkles,
   ShieldCheck,
+  Split,
   type LucideIcon,
 } from "lucide-react";
 import { PageHeader, Card } from "@/components/ui";
@@ -80,6 +81,13 @@ const CONCEPTS: Concept[] = [
     body: "If you upload the same invoice twice, it gets flagged with an orange badge before you approve it. You decide: approve the real one, delete the copy. There’s no button you need to press to make this happen.",
     href: "/duplicates",
     cta: "View duplicates",
+  },
+  {
+    icon: Split,
+    title: "One receipt, two sites? Split it",
+    body: "Bought for two jobs in one trip? On the review screen, tag the line items that belong to the other site and the total is divided between the sites automatically — no calculator needed. Untagged lines stay with the invoice’s main site. (You’ll see this once you have two or more sites.)",
+    href: "/review",
+    cta: "Open the Review Queue",
   },
   {
     icon: FileBarChart,

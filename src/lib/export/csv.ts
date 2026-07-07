@@ -1,4 +1,4 @@
-import type { InvoiceWithSupplier } from "@/lib/types";
+import type { InvoiceWithSupplier, InvoiceSiteAllocation } from "@/lib/types";
 import { formatVat } from "@/lib/utils";
 import { bucketKey } from "@/lib/periods";
 
@@ -21,13 +21,23 @@ export function toCsv(rows: Record<string, unknown>[]): string {
   return lines.join("\n");
 }
 
-/** Flatten invoices into the bookkeeping export shape (PRD §7.12). */
-export function invoicesToRows(invoices: InvoiceWithSupplier[]) {
-  return invoices.map((i) => ({
+/**
+ * Flatten invoices into the bookkeeping export shape (PRD §7.12).
+ * With `allocationsByInvoice`, a site-split invoice fans out to one row per
+ * allocation (site + site_amount), so per-site pivots sum correctly; invoice-
+ * level columns repeat verbatim on each of its rows. `site_amount` falls back
+ * to the invoice total so the column stays summable for unsited invoices.
+ */
+export function invoicesToRows(
+  invoices: InvoiceWithSupplier[],
+  allocationsByInvoice?: Map<string, InvoiceSiteAllocation[]>,
+) {
+  const base = (i: InvoiceWithSupplier) => ({
     status: i.status,
     invoice_date: i.invoice_date ?? "",
     supplier: i.supplier?.supplier_name || i.original_supplier_name || "",
     site: i.project?.name ?? "",
+    site_amount: round2(Number(i.total_incl_vat ?? 0)),
     invoice_number: i.invoice_number ?? "",
     document_type: i.document_type,
     subtotal_excl_vat: i.subtotal_excl_vat ?? "",
@@ -37,7 +47,17 @@ export function invoicesToRows(invoices: InvoiceWithSupplier[]) {
     payment_method: i.payment_method ?? "",
     vat_number: formatVat(i.vat_number) ?? "",
     confidence: i.confidence_score ?? "",
-  }));
+  });
+
+  return invoices.flatMap((i) => {
+    const allocs = allocationsByInvoice?.get(i.id);
+    if (!allocs?.length) return [base(i)];
+    return allocs.map((a) => ({
+      ...base(i),
+      site: a.project?.name ?? "",
+      site_amount: round2(Number(a.amount)),
+    }));
+  });
 }
 
 /**

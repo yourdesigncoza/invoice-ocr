@@ -6,6 +6,7 @@ import type {
   Supplier,
   Project,
   InvoiceItem,
+  InvoiceSiteAllocation,
   DuplicateCheck,
   UserSettings,
 } from "./types";
@@ -37,10 +38,30 @@ export async function getInvoices(
 ): Promise<InvoiceWithSupplier[]> {
   const supabase = await db();
   if (!supabase) return [];
+  // Site filter goes through invoice_site_allocations (the per-site source of
+  // truth): a split invoice belongs to every site it has an allocation for,
+  // and the row carries that site's share as `allocated_amount`. Two-query
+  // shape (allocations → ids → invoices) keeps the main select simple.
+  let allocatedByInvoice: Map<string, number> | null = null;
+  if (filters.projectId) {
+    const { data: allocs, error: allocErr } = await supabase
+      .from("invoice_site_allocations")
+      .select("invoice_id, amount")
+      .eq("project_id", filters.projectId);
+    if (allocErr) {
+      console.error("getInvoices allocations", allocErr.message);
+      return [];
+    }
+    if (!allocs?.length) return [];
+    allocatedByInvoice = new Map(
+      allocs.map((a) => [a.invoice_id as string, Number(a.amount)]),
+    );
+  }
+
   let q = supabase
     .from("invoices")
     .select(
-      "*, supplier:suppliers(*), project:projects(*), duplicate_checks!duplicate_checks_invoice_id_fkey(count)",
+      "*, supplier:suppliers(*), project:projects(*), duplicate_checks!duplicate_checks_invoice_id_fkey(count), invoice_site_allocations(count)",
     )
     .order("invoice_date", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
@@ -52,7 +73,7 @@ export async function getInvoices(
       : q.eq("status", filters.status);
   if (filters.paymentStatus) q = q.eq("payment_status", filters.paymentStatus);
   if (filters.supplierId) q = q.eq("supplier_id", filters.supplierId);
-  if (filters.projectId) q = q.eq("project_id", filters.projectId);
+  if (allocatedByInvoice) q = q.in("id", [...allocatedByInvoice.keys()]);
   if (filters.from) q = q.gte("invoice_date", filters.from);
   if (filters.to) q = q.lte("invoice_date", filters.to);
   if (filters.search)
@@ -65,21 +86,34 @@ export async function getInvoices(
     console.error("getInvoices", error.message);
     return [];
   }
-  return (data ?? []).map(flattenDuplicateCount) as InvoiceWithSupplier[];
+  return (data ?? []).map((row) => {
+    const flat = flattenAggregates(row) as InvoiceWithSupplier;
+    const allocated = allocatedByInvoice?.get(flat.id);
+    if (allocated !== undefined) flat.allocated_amount = allocated;
+    return flat;
+  });
 }
 
-// Supabase returns the aggregate as `duplicate_checks: [{ count }]`; flatten it
-// to a plain `duplicate_count` number and drop the raw relation.
-function flattenDuplicateCount(row: Record<string, unknown>): unknown {
+// Supabase returns count aggregates as `relation: [{ count }]`; flatten them to
+// plain numbers (`duplicate_count`, `allocation_count`) and drop the relations.
+function flattenAggregates(row: Record<string, unknown>): unknown {
   const dc = row.duplicate_checks as { count: number }[] | undefined;
-  const { duplicate_checks: _omit, ...rest } = row;
-  void _omit;
-  return { ...rest, duplicate_count: dc?.[0]?.count ?? 0 };
+  const ac = row.invoice_site_allocations as { count: number }[] | undefined;
+  const { duplicate_checks: _d, invoice_site_allocations: _a, ...rest } = row;
+  void _d;
+  void _a;
+  return {
+    ...rest,
+    duplicate_count: dc?.[0]?.count ?? 0,
+    allocation_count: ac?.[0]?.count ?? 0,
+  };
 }
 
-export async function getInvoice(
-  id: string,
-): Promise<{ invoice: InvoiceWithSupplier; items: InvoiceItem[] } | null> {
+export async function getInvoice(id: string): Promise<{
+  invoice: InvoiceWithSupplier;
+  items: InvoiceItem[];
+  allocations: InvoiceSiteAllocation[];
+} | null> {
   const supabase = await db();
   if (!supabase) return null;
   const { data: invoice } = await supabase
@@ -90,13 +124,17 @@ export async function getInvoice(
     .eq("id", id)
     .single();
   if (!invoice) return null;
-  const { data: items } = await supabase
-    .from("invoice_items")
-    .select("*")
-    .eq("invoice_id", id);
+  const [{ data: items }, { data: allocations }] = await Promise.all([
+    supabase.from("invoice_items").select("*").eq("invoice_id", id),
+    supabase
+      .from("invoice_site_allocations")
+      .select("*, project:projects(id, name, color)")
+      .eq("invoice_id", id),
+  ]);
   return {
-    invoice: flattenDuplicateCount(invoice) as InvoiceWithSupplier,
+    invoice: flattenAggregates(invoice) as InvoiceWithSupplier,
     items: (items ?? []) as InvoiceItem[],
+    allocations: (allocations ?? []) as InvoiceSiteAllocation[],
   };
 }
 
@@ -159,7 +197,13 @@ export async function getSupplier(id: string): Promise<Supplier | null> {
 
 // ── Projects / sites (cost centres) ──────────────────────────────────────────
 
-/** Active projects + approved invoice_count & total_spend. Mirrors getSuppliers. */
+/**
+ * Active projects + approved invoice_count & total_spend. Per-site amounts come
+ * from invoice_site_allocations (the source of truth): a split invoice
+ * contributes its allocated share to each site it touches — and counts once
+ * per site it touches. Never sum invoice totals per site here (double-counts
+ * splits); whole-account numbers (dashboard) stay invoice-based.
+ */
 export async function getProjects(): Promise<
   (Project & { invoice_count: number; total_spend: number })[]
 > {
@@ -171,22 +215,46 @@ export async function getProjects(): Promise<
     .eq("archived", false)
     .order("name");
   if (!projects) return [];
-  const { data: invoices } = await supabase
-    .from("invoices")
-    .select("project_id, total_incl_vat, status");
+  const { data: allocs } = await supabase
+    .from("invoice_site_allocations")
+    .select("project_id, amount, invoice:invoices!inner(status)");
   const agg = new Map<string, { count: number; spend: number }>();
-  for (const inv of invoices ?? []) {
-    if (!inv.project_id || inv.status !== "approved") continue;
-    const a = agg.get(inv.project_id) ?? { count: 0, spend: 0 };
-    a.count += 1;
-    a.spend += Number(inv.total_incl_vat ?? 0);
-    agg.set(inv.project_id, a);
+  for (const a of allocs ?? []) {
+    const inv = a.invoice as unknown as { status: string } | null;
+    if (inv?.status !== "approved") continue;
+    const cur = agg.get(a.project_id) ?? { count: 0, spend: 0 };
+    cur.count += 1;
+    cur.spend += Number(a.amount ?? 0);
+    agg.set(a.project_id, cur);
   }
   return (projects as Project[]).map((p) => ({
     ...p,
     invoice_count: agg.get(p.id)?.count ?? 0,
     total_spend: agg.get(p.id)?.spend ?? 0,
   }));
+}
+
+/**
+ * Site allocations for a set of invoices, keyed by invoice id (with project
+ * names) — feeds the per-allocation CSV export rows.
+ */
+export async function getAllocationsByInvoice(
+  invoiceIds: string[],
+): Promise<Map<string, InvoiceSiteAllocation[]>> {
+  const map = new Map<string, InvoiceSiteAllocation[]>();
+  if (!invoiceIds.length) return map;
+  const supabase = await db();
+  if (!supabase) return map;
+  const { data } = await supabase
+    .from("invoice_site_allocations")
+    .select("*, project:projects(id, name, color)")
+    .in("invoice_id", invoiceIds);
+  for (const a of (data ?? []) as InvoiceSiteAllocation[]) {
+    const list = map.get(a.invoice_id) ?? [];
+    list.push(a);
+    map.set(a.invoice_id, list);
+  }
+  return map;
 }
 
 /** Lightweight active-project list for pickers. */

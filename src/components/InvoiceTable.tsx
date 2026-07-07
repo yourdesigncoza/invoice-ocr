@@ -59,13 +59,33 @@ export function InvoiceTable({
                   {inv.supplier?.supplier_name || inv.original_supplier_name || "Unknown"}
                 </Td>
                 {showProject && (
-                  <Td className="text-muted">{inv.project?.name || "—"}</Td>
+                  <Td className="text-muted whitespace-nowrap">
+                    {inv.project?.name || "—"}
+                    {(inv.allocation_count ?? 0) > 1 && (
+                      <span
+                        className="ml-1 rounded bg-slate-100 px-1 text-xs tabular-nums"
+                        title={`Split across ${inv.allocation_count} sites`}
+                      >
+                        +{(inv.allocation_count ?? 0) - 1}
+                      </span>
+                    )}
+                  </Td>
                 )}
                 <Td className="text-muted">{inv.invoice_number || "—"}</Td>
                 <Td className="text-muted whitespace-nowrap">{inv.document_type}</Td>
                 <Td><PaidBadge status={inv.payment_status} /></Td>
-                <Td className="text-right tabular-nums font-medium">
-                  {formatMoney(inv.total_incl_vat, inv.currency_code)}
+                <Td className="text-right tabular-nums font-medium whitespace-nowrap">
+                  {inv.allocated_amount !== undefined &&
+                  inv.allocated_amount !== Number(inv.total_incl_vat ?? 0) ? (
+                    <>
+                      {formatMoney(inv.allocated_amount, inv.currency_code)}
+                      <span className="ml-1 text-xs font-normal text-muted">
+                        of {formatMoney(inv.total_incl_vat, inv.currency_code)}
+                      </span>
+                    </>
+                  ) : (
+                    formatMoney(inv.total_incl_vat, inv.currency_code)
+                  )}
                 </Td>
                 <Td className="text-right tabular-nums text-muted">
                   {formatMoney(inv.vat_amount, inv.currency_code)}

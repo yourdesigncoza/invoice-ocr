@@ -24,7 +24,7 @@ export default async function ReviewDetailPage(
 
   const result = await getInvoice(id);
   if (!result) notFound();
-  const { invoice, items } = result;
+  const { invoice, items, allocations } = result;
 
   const supabase = (await createServerSupabase())!;
 
@@ -66,6 +66,7 @@ export default async function ReviewDetailPage(
     <ReviewClient
       invoice={invoice}
       items={items}
+      allocations={allocations}
       imageUrl={imageUrl}
       isPdf={isPdf}
       supplierMatches={matches.map((m) => ({

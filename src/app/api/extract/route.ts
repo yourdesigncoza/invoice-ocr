@@ -4,6 +4,7 @@ import { getUser } from "@/lib/auth-guards";
 import { processInvoice } from "@/lib/extraction";
 import { preprocessImage } from "@/lib/extraction/preprocess";
 import { findDuplicates } from "@/lib/duplicates/detect";
+import { syncAllocationsForInvoice } from "@/lib/allocations/sync";
 import { STORAGE_BUCKET, DEFAULT_CURRENCY, ACCEPTED_UPLOAD_TYPES } from "@/lib/constants";
 
 export const runtime = "nodejs";
@@ -60,8 +61,21 @@ export async function POST(req: NextRequest) {
   const files = form.getAll("files").filter((f): f is File => f instanceof File);
   if (files.length === 0)
     return NextResponse.json({ error: "No files provided" }, { status: 400 });
-  // optional site assignment for the whole batch (a batch is usually one site)
+  // optional site assignment for the whole batch (a batch is usually one site).
+  // Ownership check here in Phase 1 (admin client + explicit user filter):
+  // Phase 2 runs with the service-role client, so a forged foreign project id
+  // must be rejected while we still have the session to blame it on.
   const projectId = (form.get("projectId") as string | null) || null;
+  if (projectId) {
+    const { data: proj } = await supabase
+      .from("projects")
+      .select("id")
+      .eq("id", projectId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!proj)
+      return NextResponse.json({ error: "Unknown site" }, { status: 400 });
+  }
 
   // Phase 1 — store originals + create processing rows (fast)
   const jobs: Job[] = [];
@@ -205,6 +219,22 @@ async function processStored(supabase: Supabase, job: Job) {
           ...li,
         })),
       );
+    }
+
+    // default site allocation (per-site amounts live in
+    // invoice_site_allocations; a sited invoice always has its mirror row).
+    // Failure here must not fail the document — the next sync repairs it.
+    if (projectId) {
+      try {
+        await syncAllocationsForInvoice(supabase, {
+          id: invoice.id,
+          user_id: userId,
+          project_id: projectId,
+          total_incl_vat: invoice.total_incl_vat,
+        });
+      } catch (allocErr) {
+        console.warn(`allocation sync failed for invoice ${invoice.id}:`, allocErr);
+      }
     }
 
     // extraction_log (raw text kept separate from structured json, PRD §7.3.1)

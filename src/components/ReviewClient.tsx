@@ -22,13 +22,22 @@ import {
   PAYMENT_METHODS,
   type InvoiceStatus,
 } from "@/lib/constants";
-import type { Invoice, InvoiceItem, Supplier, Project } from "@/lib/types";
+import type {
+  Invoice,
+  InvoiceItem,
+  InvoiceSiteAllocation,
+  Supplier,
+  Project,
+} from "@/lib/types";
+import { SiteSplitEditor } from "@/components/SiteSplitEditor";
+import type { SplitPayload } from "@/lib/allocations/split";
 
 type Action = "approve" | "reject" | "save";
 
 interface Props {
   invoice: Invoice & { supplier?: Supplier | null };
   items: InvoiceItem[];
+  allocations: InvoiceSiteAllocation[];
   imageUrl: string | null;
   isPdf: boolean;
   supplierMatches: { supplier: Supplier; score: number; reason: string }[];
@@ -54,6 +63,7 @@ const FIELDS = [
 export function ReviewClient({
   invoice,
   items,
+  allocations,
   imageUrl,
   isPdf,
   supplierMatches,
@@ -79,6 +89,7 @@ export function ReviewClient({
   const initialPaid =
     invoice.payment_status == null ? true : invoice.payment_status === "Paid";
   const [paid, setPaid] = useState(initialPaid);
+  const [split, setSplit] = useState<SplitPayload | null>(null);
   const [busy, setBusy] = useState<Action | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,7 +98,8 @@ export function ReviewClient({
     corrected.size > 0 ||
     supplierId !== invoice.supplier_id ||
     projectId !== (invoice.project_id ?? "") ||
-    paid !== initialPaid;
+    paid !== initialPaid ||
+    split !== null;
 
   function setField(key: string, value: string) {
     setValues((p) => ({ ...p, [key]: value }));
@@ -118,6 +130,7 @@ export function ReviewClient({
           correctedFields: [...corrected],
           linkSupplierId: supplierId ?? undefined,
           linkProjectId: projectId,
+          split: split ?? undefined,
           ...extra,
         }),
       });
@@ -125,6 +138,7 @@ export function ReviewClient({
       if (!res.ok) throw new Error(json.error || "Request failed");
       if (action === "save") {
         setCorrected(new Set());
+        setSplit(null);
         router.refresh();
       } else {
         router.push("/review");
@@ -399,32 +413,19 @@ export function ReviewClient({
             </div>
           </div>
 
-          {items.length > 0 && (
-            <div>
-              <h3 className="text-sm font-semibold mb-2">Line items</h3>
-              <Card className="overflow-hidden">
-                <table className="w-full text-xs">
-                  <thead className="bg-slate-50 text-muted text-left">
-                    <tr>
-                      <th className="px-3 py-1.5 font-medium">Description</th>
-                      <th className="px-3 py-1.5 font-medium text-right">Qty</th>
-                      <th className="px-3 py-1.5 font-medium text-right">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {items.map((it) => (
-                      <tr key={it.id}>
-                        <td className="px-3 py-1.5">{it.description || "—"}</td>
-                        <td className="px-3 py-1.5 text-right tabular-nums">{it.quantity ?? "—"}</td>
-                        <td className="px-3 py-1.5 text-right tabular-nums">
-                          {formatMoney(it.line_total, invoice.currency_code)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Card>
-            </div>
+          {(items.length > 0 || projects.length >= 2) && (
+            <SiteSplitEditor
+              items={items}
+              projects={projects}
+              defaultProjectId={projectId || null}
+              totalInclVat={
+                values.total_incl_vat === "" ? null : Number(values.total_incl_vat)
+              }
+              currency={invoice.currency_code}
+              allocations={allocations}
+              onChange={setSplit}
+              disabled={locked}
+            />
           )}
 
           {/* secondary actions */}

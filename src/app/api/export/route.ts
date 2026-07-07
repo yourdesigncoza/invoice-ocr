@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getInvoices } from "@/lib/data";
+import { getInvoices, getAllocationsByInvoice } from "@/lib/data";
 import { getUser } from "@/lib/auth-guards";
 import { toCsv, invoicesToRows, vatSummaryRows } from "@/lib/export/csv";
 import type { InvoiceStatus } from "@/lib/constants";
@@ -29,7 +29,14 @@ export async function GET(req: NextRequest) {
   });
 
   const isVat = type === "vat_summary";
-  const csv = toCsv(isVat ? vatSummaryRows(invoices) : invoicesToRows(invoices));
+  // per-allocation fan-out for the register export only — the VAT summary is
+  // invoice-level (a split invoice must count once per month, not per site)
+  const allocations = isVat
+    ? undefined
+    : await getAllocationsByInvoice(invoices.map((i) => i.id));
+  const csv = toCsv(
+    isVat ? vatSummaryRows(invoices) : invoicesToRows(invoices, allocations),
+  );
   const range = from || to ? `-${from ?? "start"}_${to ?? "today"}` : "";
   const name = isVat
     ? `vat-summary${range}.csv`

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { vatSummaryRows, toCsv } from "@/lib/export/csv";
-import type { InvoiceWithSupplier } from "@/lib/types";
+import { vatSummaryRows, invoicesToRows, toCsv } from "@/lib/export/csv";
+import type { InvoiceWithSupplier, InvoiceSiteAllocation } from "@/lib/types";
 
 function inv(o: Partial<InvoiceWithSupplier>): InvoiceWithSupplier {
   return {
@@ -44,6 +44,52 @@ describe("vatSummaryRows (VAT filing rollup)", () => {
 
   it("ignores undated invoices and returns empty when there are none", () => {
     expect(vatSummaryRows([inv({ invoice_date: null, total_incl_vat: 99 })])).toEqual([]);
+  });
+});
+
+describe("invoicesToRows (per-allocation fan-out)", () => {
+  const alloc = (
+    invoice_id: string,
+    name: string,
+    amount: number,
+  ): InvoiceSiteAllocation =>
+    ({
+      id: `${invoice_id}-${name}`,
+      invoice_id,
+      project_id: name,
+      amount,
+      source: "items",
+      project: { id: name, name, color: null },
+    }) as InvoiceSiteAllocation;
+
+  it("split invoice → one row per site, site_amounts sum to the total", () => {
+    const i = inv({ id: "i1", total_incl_vat: 100 } as Partial<InvoiceWithSupplier>);
+    const rows = invoicesToRows(
+      [i],
+      new Map([["i1", [alloc("i1", "Site A", 66.67), alloc("i1", "Site B", 33.33)]]]),
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.site).sort()).toEqual(["Site A", "Site B"]);
+    expect(rows.reduce((s, r) => s + Number(r.site_amount), 0)).toBeCloseTo(100, 2);
+    // invoice-level columns repeat verbatim
+    expect(rows.every((r) => r.total_incl_vat === 100)).toBe(true);
+  });
+
+  it("no allocations → single row, site_amount = total (column stays summable)", () => {
+    const rows = invoicesToRows([
+      inv({ id: "i2", total_incl_vat: 50 } as Partial<InvoiceWithSupplier>),
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].site).toBe("");
+    expect(rows[0].site_amount).toBe(50);
+  });
+
+  it("uniform keys: fan-out and plain rows share the same header set", () => {
+    const i1 = inv({ id: "i1", total_incl_vat: 100 } as Partial<InvoiceWithSupplier>);
+    const i2 = inv({ id: "i2", total_incl_vat: 50 } as Partial<InvoiceWithSupplier>);
+    const rows = invoicesToRows([i1, i2], new Map([["i1", [alloc("i1", "A", 100)]]]));
+    const keys = rows.map((r) => Object.keys(r).join(","));
+    expect(new Set(keys).size).toBe(1);
   });
 });
 

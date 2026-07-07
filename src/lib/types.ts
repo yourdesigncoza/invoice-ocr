@@ -75,8 +75,20 @@ export interface InvoiceItem {
   line_total: number | null;
   vat_rate: number | null;
   category: string | null;
+  /** Site this line belongs to; null = the invoice's default site (0011). */
+  project_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** Per-site share of an invoice's total (0011). Sums to total_incl_vat. */
+export interface InvoiceSiteAllocation {
+  id: string;
+  invoice_id: string;
+  project_id: string;
+  amount: number;
+  source: "default" | "items" | "manual";
+  project?: Pick<Project, "id" | "name" | "color"> | null;
 }
 
 export interface DocumentUpload {
@@ -125,4 +137,8 @@ export type InvoiceWithSupplier = Invoice & {
   project?: Project | null;
   // count of open duplicate_checks flagging this invoice (system-detected)
   duplicate_count?: number;
+  // set when the register is filtered by site: this site's share of the total
+  allocated_amount?: number;
+  // number of sites this invoice's total is allocated across (>1 = split)
+  allocation_count?: number;
 };
