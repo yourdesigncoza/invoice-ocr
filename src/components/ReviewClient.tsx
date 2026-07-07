@@ -90,6 +90,8 @@ export function ReviewClient({
     invoice.payment_status == null ? true : invoice.payment_status === "Paid";
   const [paid, setPaid] = useState(initialPaid);
   const [split, setSplit] = useState<SplitPayload | null>(null);
+  // reviewer corrections to extracted line totals (item id → new value)
+  const [itemUpdates, setItemUpdates] = useState<Record<string, number | null>>({});
   const [busy, setBusy] = useState<Action | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,7 +101,8 @@ export function ReviewClient({
     supplierId !== invoice.supplier_id ||
     projectId !== (invoice.project_id ?? "") ||
     paid !== initialPaid ||
-    split !== null;
+    split !== null ||
+    Object.keys(itemUpdates).length > 0;
 
   function setField(key: string, value: string) {
     setValues((p) => ({ ...p, [key]: value }));
@@ -131,6 +134,7 @@ export function ReviewClient({
           linkSupplierId: supplierId ?? undefined,
           linkProjectId: projectId,
           split: split ?? undefined,
+          itemLineTotals: Object.keys(itemUpdates).length ? itemUpdates : undefined,
           ...extra,
         }),
       });
@@ -139,6 +143,7 @@ export function ReviewClient({
       if (action === "save") {
         setCorrected(new Set());
         setSplit(null);
+        setItemUpdates({});
         router.refresh();
       } else {
         router.push("/review");
@@ -424,6 +429,7 @@ export function ReviewClient({
               currency={invoice.currency_code}
               allocations={allocations}
               onChange={setSplit}
+              onItemTotals={setItemUpdates}
               disabled={locked}
             />
           )}

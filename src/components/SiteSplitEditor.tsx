@@ -27,6 +27,13 @@ interface Props {
   currency: string;
   allocations: InvoiceSiteAllocation[];
   onChange: (split: SplitPayload | null) => void;
+  /**
+   * Fired with the diff of corrected line totals (item id → new value, null =
+   * cleared). Present ⇒ the Total column is editable; extraction sometimes
+   * misreads a line (e.g. picks the excl-VAT column), and the reviewer must be
+   * able to fix the weight the split math runs on.
+   */
+  onItemTotals?: (updates: Record<string, number | null>) => void;
   disabled?: boolean;
 }
 
@@ -38,6 +45,7 @@ export function SiteSplitEditor({
   currency,
   allocations,
   onChange,
+  onItemTotals,
   disabled = false,
 }: Props) {
   const splittable = projects.length >= 2;
@@ -47,6 +55,42 @@ export function SiteSplitEditor({
   const [itemProjects, setItemProjects] = useState<Record<string, string | null>>(
     () => Object.fromEntries(items.map((it) => [it.id, it.project_id])),
   );
+  // Corrected line totals (as input strings). Seeded from the extracted values.
+  const [itemTotals, setItemTotals] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      items.map((it) => [it.id, it.line_total == null ? "" : String(it.line_total)]),
+    ),
+  );
+
+  // Items with the reviewer's corrections applied — every sum/derivation below
+  // must use these, never the raw props, so the preview tracks the edits.
+  const effectiveItems = useMemo(
+    () =>
+      items.map((it) => ({
+        ...it,
+        line_total:
+          itemTotals[it.id] === "" || itemTotals[it.id] === undefined
+            ? null
+            : Number(itemTotals[it.id]),
+      })),
+    [items, itemTotals],
+  );
+
+  function editTotal(itemId: string, value: string) {
+    const next = { ...itemTotals, [itemId]: value };
+    setItemTotals(next);
+    // Emit only real diffs vs the extracted values (empty diff = nothing to save).
+    const updates: Record<string, number | null> = {};
+    for (const it of items) {
+      const raw = next[it.id];
+      const parsed = raw === "" || raw === undefined ? null : Number(raw);
+      const original = it.line_total == null ? null : Number(it.line_total);
+      if (parsed !== original && (parsed === null || Number.isFinite(parsed))) {
+        updates[it.id] = parsed;
+      }
+    }
+    onItemTotals?.(updates);
+  }
   const [manualOpen, setManualOpen] = useState(persistedManual);
   const [manualRows, setManualRows] = useState<{ project_id: string; amount: string }[]>(
     () =>
@@ -86,7 +130,7 @@ export function SiteSplitEditor({
       const r = manualSplit(exceptions, defaultProjectId, totalInclVat);
       return r.ok ? { entries: r.entries, error: null } : { entries: null, error: r.error };
     }
-    const tagged = items.map((it) => ({
+    const tagged = effectiveItems.map((it) => ({
       id: it.id,
       line_total: it.line_total,
       project_id: itemProjects[it.id] ?? null,
@@ -95,12 +139,12 @@ export function SiteSplitEditor({
       return { entries: null, error: null };
     const r = deriveFromItems(tagged, defaultProjectId, totalInclVat);
     return r.ok ? { entries: r.entries, error: null } : { entries: null, error: r.error };
-  }, [splittable, manualOpen, manualRows, items, itemProjects, defaultProjectId, totalInclVat]);
+  }, [splittable, manualOpen, manualRows, effectiveItems, itemProjects, defaultProjectId, totalInclVat]);
 
   const taggedSum = useMemo(
     () =>
       round2(
-        items.reduce(
+        effectiveItems.reduce(
           (s, it) =>
             itemProjects[it.id] && itemProjects[it.id] !== defaultProjectId
               ? s + Number(it.line_total ?? 0)
@@ -108,9 +152,11 @@ export function SiteSplitEditor({
           0,
         ),
       ),
-    [items, itemProjects, defaultProjectId],
+    [effectiveItems, itemProjects, defaultProjectId],
   );
-  const itemsSum = round2(items.reduce((s, it) => s + Number(it.line_total ?? 0), 0));
+  const itemsSum = round2(
+    effectiveItems.reduce((s, it) => s + Number(it.line_total ?? 0), 0),
+  );
 
   const projectName = (id: string) => projects.find((p) => p.id === id)?.name ?? "—";
 
@@ -135,8 +181,25 @@ export function SiteSplitEditor({
                     <tr key={it.id}>
                       <td className="px-3 py-1.5">{it.description || "—"}</td>
                       <td className="px-3 py-1.5 text-right tabular-nums">{it.quantity ?? "—"}</td>
-                      <td className="px-3 py-1.5 text-right tabular-nums whitespace-nowrap">
-                        {formatMoney(it.line_total, currency)}
+                      <td className="px-3 py-1 text-right tabular-nums whitespace-nowrap">
+                        {onItemTotals ? (
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={itemTotals[it.id] ?? ""}
+                            onChange={(e) => editTotal(it.id, e.target.value)}
+                            disabled={disabled}
+                            aria-label="Line total"
+                            className={
+                              "w-20 rounded border bg-surface px-1.5 py-1 text-xs text-right tabular-nums outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary " +
+                              (String(it.line_total ?? "") !== (itemTotals[it.id] ?? "")
+                                ? "border-primary/60 bg-blue-50/40"
+                                : "border-border")
+                            }
+                          />
+                        ) : (
+                          formatMoney(it.line_total, currency)
+                        )}
                       </td>
                       {splittable && (
                         <td className="px-3 py-1">

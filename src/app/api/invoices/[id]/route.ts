@@ -79,6 +79,8 @@ interface PatchBody {
   linkProjectId?: string | null;
   // multi-site split (per-site amounts land in invoice_site_allocations)
   split?: SplitPayload;
+  // reviewer corrections to extracted line totals (item id → value, null clears)
+  itemLineTotals?: Record<string, number | null>;
   // workflow action
   action?: "approve" | "reject" | "save";
   correctedFields?: string[]; // names the reviewer manually changed
@@ -205,42 +207,86 @@ export async function PATCH(
 
   let splitEntries: AllocationEntry[] | null = null;
   let taggedItems: TaggableItem[] | null = null;
-  if (body.split) {
-    const { data: items } = await supabase
+  const lineTotals = body.itemLineTotals ?? null;
+  if (body.split || lineTotals) {
+    const { data: rawItems } = await supabase
       .from("invoice_items")
       .select("id, line_total, project_id")
       .eq("invoice_id", id);
-    const byId = new Map((items ?? []).map((it) => [it.id as string, it]));
-
-    if (body.split.mode === "items") {
-      for (const itemId of Object.keys(body.split.itemProjects)) {
-        if (!byId.has(itemId))
+    // Line-total corrections: validate, then apply in memory so any split
+    // derivation below runs on the corrected weights.
+    if (lineTotals) {
+      const known = new Set((rawItems ?? []).map((it) => it.id as string));
+      for (const [itemId, v] of Object.entries(lineTotals)) {
+        if (!known.has(itemId))
           return NextResponse.json({ error: "Unknown line item" }, { status: 400 });
+        if (v !== null && !Number.isFinite(Number(v)))
+          return NextResponse.json({ error: "Invalid line total" }, { status: 400 });
       }
-      taggedItems = (items ?? []).map((it) => ({
-        id: it.id as string,
-        line_total: it.line_total as number | null,
-        project_id:
-          body.split!.mode === "items" && it.id in body.split!.itemProjects
-            ? body.split!.itemProjects[it.id as string]
-            : (it.project_id as string | null),
-      }));
-      const derived = deriveFromItems(taggedItems, nextProjectId, nextTotal);
-      if (!derived.ok)
-        return NextResponse.json({ error: derived.error }, { status: 400 });
-      splitEntries = derived.entries;
-    } else if (body.split.mode === "manual") {
-      const result = manualSplit(body.split.exceptions, nextProjectId, nextTotal);
-      if (!result.ok)
-        return NextResponse.json({ error: result.error }, { status: 400 });
-      splitEntries = result.entries;
-    } else {
-      taggedItems = (items ?? []).map((it) => ({
-        id: it.id as string,
-        line_total: it.line_total as number | null,
-        project_id: null,
-      }));
-      splitEntries = defaultAllocation(nextProjectId, nextTotal);
+    }
+    const items = (rawItems ?? []).map((it) => ({
+      ...it,
+      line_total:
+        lineTotals && (it.id as string) in lineTotals
+          ? lineTotals[it.id as string]
+          : (it.line_total as number | null),
+    }));
+    const byId = new Map(items.map((it) => [it.id as string, it]));
+
+    // A total correction with no split payload must still refresh an existing
+    // items-sourced split — re-derive from the stored tags with new weights.
+    if (!body.split && lineTotals) {
+      const { data: existing } = await supabase
+        .from("invoice_site_allocations")
+        .select("source")
+        .eq("invoice_id", id);
+      if ((existing ?? []).some((a) => a.source === "items")) {
+        const derived = deriveFromItems(
+          items.map((it) => ({
+            id: it.id as string,
+            line_total: it.line_total,
+            project_id: it.project_id as string | null,
+          })),
+          nextProjectId,
+          nextTotal,
+        );
+        if (!derived.ok)
+          return NextResponse.json({ error: derived.error }, { status: 400 });
+        splitEntries = derived.entries;
+      }
+    }
+
+    if (body.split) {
+      if (body.split.mode === "items") {
+        for (const itemId of Object.keys(body.split.itemProjects)) {
+          if (!byId.has(itemId))
+            return NextResponse.json({ error: "Unknown line item" }, { status: 400 });
+        }
+        taggedItems = items.map((it) => ({
+          id: it.id as string,
+          line_total: it.line_total as number | null,
+          project_id:
+            body.split!.mode === "items" && it.id in body.split!.itemProjects
+              ? body.split!.itemProjects[it.id as string]
+              : (it.project_id as string | null),
+        }));
+        const derived = deriveFromItems(taggedItems, nextProjectId, nextTotal);
+        if (!derived.ok)
+          return NextResponse.json({ error: derived.error }, { status: 400 });
+        splitEntries = derived.entries;
+      } else if (body.split.mode === "manual") {
+        const result = manualSplit(body.split.exceptions, nextProjectId, nextTotal);
+        if (!result.ok)
+          return NextResponse.json({ error: result.error }, { status: 400 });
+        splitEntries = result.entries;
+      } else {
+        taggedItems = items.map((it) => ({
+          id: it.id as string,
+          line_total: it.line_total as number | null,
+          project_id: null,
+        }));
+        splitEntries = defaultAllocation(nextProjectId, nextTotal);
+      }
     }
   }
 
@@ -255,7 +301,20 @@ export async function PATCH(
     return NextResponse.json({ error: updErr.message }, { status: 400 });
 
   try {
-    if (body.split && splitEntries) {
+    // persist corrected line totals first — the sync path re-reads items from
+    // the DB, so the weights must be on disk before allocations are touched
+    if (lineTotals) {
+      for (const [itemId, v] of Object.entries(lineTotals)) {
+        const { error: ltErr } = await supabase
+          .from("invoice_items")
+          .update({ line_total: v })
+          .eq("id", itemId)
+          .eq("invoice_id", id);
+        if (ltErr) throw new Error(ltErr.message);
+      }
+    }
+
+    if (splitEntries) {
       // persist item tags (items mode sets them; clear nulls them)
       if (taggedItems) {
         const byTarget = new Map<string | null, string[]>();
@@ -313,7 +372,11 @@ export async function PATCH(
     entity_type: "invoice",
     entity_id: id,
     old_value: before,
-    new_value: splitEntries ? { ...after, site_split: splitEntries } : after,
+    new_value: {
+      ...after,
+      ...(splitEntries ? { site_split: splitEntries } : null),
+      ...(lineTotals ? { item_line_totals: lineTotals } : null),
+    },
   });
 
   // record which fields were manually corrected (PRD §11.5.1) — feeds the

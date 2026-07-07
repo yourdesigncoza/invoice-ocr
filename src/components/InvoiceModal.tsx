@@ -92,6 +92,7 @@ export function InvoiceModal({
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [allocations, setAllocations] = useState<InvoiceSiteAllocation[]>([]);
   const [split, setSplit] = useState<SplitPayload | null>(null);
+  const [itemUpdates, setItemUpdates] = useState<Record<string, number | null>>({});
   const [loading, setLoading] = useState(false);
 
   const [editing, setEditing] = useState(false);
@@ -148,6 +149,7 @@ export function InvoiceModal({
     setProjectId(invoice.project_id ?? "");
     setCorrected(new Set());
     setSplit(null);
+    setItemUpdates({});
     setError(null);
     setEditing(true);
   }
@@ -172,6 +174,7 @@ export function InvoiceModal({
           correctedFields: [...corrected],
           linkProjectId: projectId,
           split: split ?? undefined,
+          itemLineTotals: Object.keys(itemUpdates).length ? itemUpdates : undefined,
         }),
       });
       const json = await res.json();
@@ -510,6 +513,7 @@ export function InvoiceModal({
                     currency={invoice.currency_code}
                     allocations={allocations}
                     onChange={setSplit}
+                    onItemTotals={setItemUpdates}
                     disabled={saving}
                   />
                 ) : items.length > 0 ? (
@@ -551,7 +555,13 @@ export function InvoiceModal({
                   </button>
                   <button
                     onClick={save}
-                    disabled={saving || (corrected.size === 0 && !projectChanged && split === null)}
+                    disabled={
+                      saving ||
+                      (corrected.size === 0 &&
+                        !projectChanged &&
+                        split === null &&
+                        Object.keys(itemUpdates).length === 0)
+                    }
                     className="inline-flex items-center gap-2 rounded-lg bg-primary text-white px-3.5 py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:pointer-events-none"
                   >
                     {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
