@@ -78,7 +78,7 @@ python3 eval/portal/build.py --model gpt-4o                   # rebuild human ve
 ```
 
 Migrations: the Supabase MCP can apply DDL/DML directly (`apply_migration` /
-`execute_sql`, project ref `kitbiplhdoabmvnrlgxa`); keep the `.sql` file in
+`execute_sql`, project ref `lxefjksaxmiawrnnewmj` — matches `.mcp.json`); keep the `.sql` file in
 `supabase/migrations/` in sync with what's applied.
 
 Env vars live in `.env.local` (see `.env.example`): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (server only), `OPENAI_API_KEY` (server only), `OPENAI_VISION_MODEL`, `ADMIN_EMAILS` (comma-separated super-admins).
